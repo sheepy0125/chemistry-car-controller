@@ -26,7 +26,7 @@ use core::cell::Cell;
 use embedded_hal::serial::Read;
 use fixedvec::FixedVec;
 use nb::block;
-// #[path = "../../shared/types.rs"]   // Rust Analyzer didn't like this!
+// #[path = "../../shared/types.rs"]
 #[path = "./types.rs"]
 mod types;
 use types::*;
@@ -118,6 +118,83 @@ fn millis() -> u32 {
     avr_device::interrupt::free(|cs| MILLIS_COUNTER.borrow(cs).get())
 }
 
+/***** Communicate with client *****/
+fn write_status<'a>(serial: &'a mut Serial, status: &'a Status) {
+    ufmt::uwriteln!(
+        serial,
+        "{}{}{}{}{}",
+        OK_RESPONSE_PROMPT,
+        COMMAND_SEPARATOR,
+        status.running,
+        PARSING_SEPARATOR,
+        status.uptime
+    )
+    .void_unwrap();
+}
+
+fn get_command<'a, 'b>(
+    serial: &'b mut Serial,
+    argument_buffer: &'a mut [char; MAXIMUM_ARGUMENT_LENGTH],
+) -> Result<ParsedCommand<'a>, ()> {
+    ufmt::uWrite::write_str(serial, READY_PROMPT).void_unwrap();
+    let mut preallocated_space = alloc_stack!([char; MAXIMUM_INPUT_LENGTH]);
+    let buffer = {
+        let mut new_line_received = false;
+        let mut buffer = FixedVec::new(&mut preallocated_space);
+        while !new_line_received {
+            match block!(serial.read())
+                .void_unwrap()
+                .try_into()
+                .unwrap_or('?')
+            {
+                // Newline signifies end of equation
+                '\n' => new_line_received = true,
+                // Ignore spaces
+                ' ' => {}
+                // Everything else
+                byte => buffer.push(byte).unwrap_or_else(|_| {
+                    // The only error that this can return is one of no space left
+                    new_line_received = true;
+                }),
+            }
+        }
+        buffer
+    };
+
+    // Look for the index separating the command from the arguments
+    let buffer_slice = buffer.as_slice();
+    let separate_idx = buffer_slice
+        .iter()
+        .position(|character| character == &COMMAND_SEPARATOR)
+        .ok_or(())?;
+
+    // Parse these
+    let command = Command::try_from(&buffer_slice[0..separate_idx])?;
+    // No possible way to convert this to a `&str` (no allocation),
+    // so instead we're using a fixed size array with null terminators!
+    for (idx, argument_character) in buffer_slice[separate_idx + 1..].iter().enumerate() {
+        // By the way, I hate doing this
+        argument_buffer[idx] = *argument_character;
+    }
+
+    Ok(ParsedCommand {
+        command,
+        arguments: argument_buffer,
+    })
+}
+
+fn run_command<'b>(serial: &'b mut Serial, command: ParsedCommand) {
+    match command.command {
+        Command::Status => {
+            let status = Status {
+                running: false,
+                uptime: millis() as usize,
+            };
+            write_status(serial, &status);
+        }
+    };
+}
+
 /***** Main *****/
 #[arduino_hal::entry]
 fn main() -> ! {
@@ -130,5 +207,15 @@ fn main() -> ! {
     // Enable interrupts globally
     unsafe { avr_device::interrupt::enable() };
 
-    loop {}
+    loop {
+        let arguments_buffer = &mut ['\0'; MAXIMUM_ARGUMENT_LENGTH];
+        let command = match get_command(&mut serial, arguments_buffer) {
+            Ok(command) => command,
+            Err(()) => {
+                ufmt::uwriteln!(&mut serial, "{}", ERR_RESPONSE_PROMPT).void_unwrap();
+                continue;
+            }
+        };
+        run_command(&mut serial, command);
+    }
 }
