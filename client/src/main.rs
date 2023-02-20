@@ -28,13 +28,16 @@ where
     println!("{e}");
 }
 
-/// Block and read until there is a newline from the serial
+/// Block and read until there is an EOL or EOF from the serial connection
 fn read_serial_until_newline(serial: &mut Box<dyn SerialPort>) -> String {
     let mut return_string = String::new();
     let mut character_buffer = [0_u8; 1];
     loop {
         character_buffer[0] = 0_u8;
-        serial.read_exact(&mut character_buffer).unwrap();
+        match serial.read_exact(&mut character_buffer) {
+            Ok(()) => (),
+            Err(_) => break,
+        };
         let character = character_buffer[0] as char;
         match character {
             '\n' => break,
@@ -49,17 +52,13 @@ fn read_serial_until_newline(serial: &mut Box<dyn SerialPort>) -> String {
 #[derive(Copy, Clone)]
 enum MenuOption {
     Start = 0_u8,
-    /// Connect to the R41Z middleman
-    ConnectBluetooth = 1_u8,
-    /// Establish a serial connection
-    ConnectSerial = 2_u8,
     /// Input the distance to travel
-    DistanceInput = 3_u8,
+    DistanceInput = 1_u8,
     /// Confirm ready to go
-    Confirm = 4_u8,
+    Confirm = 2_u8,
     /// General status of the car
-    Status = 5_u8,
-    End = 6_u8,
+    Status = 3_u8,
+    End = 4_u8,
 }
 impl TryFrom<u8> for MenuOption {
     type Error = ();
@@ -107,7 +106,7 @@ impl MenuOption {
 
 trait ArduinoGUIHandlers {
     fn new(serial: Box<dyn SerialPort>) -> Self;
-    fn update_status(&mut self) -> Result<(), ()>;
+    fn update_status(&mut self) -> Result<(), Error>;
 }
 struct ArduinoGUI {
     serial: Box<dyn SerialPort>,
@@ -125,10 +124,10 @@ impl ArduinoGUIHandlers for ArduinoGUI {
         }
     }
 
-    fn update_status(&mut self) -> Result<(), ()> {
+    fn update_status(&mut self) -> Result<(), Error> {
         writeln!(&mut self.serial, "STATUS$").unwrap();
         let status_string = read_serial_until_newline(&mut self.serial);
-        let status_parsed = Status::try_from(status_string.as_str())?;
+        let status_parsed = serde_json::from_str(&status_string)?;
         self.status = Some(status_parsed);
 
         Ok(())
@@ -142,8 +141,8 @@ impl App for ArduinoGUI {
         let current_time = Instant::now();
         if current_time.duration_since(self.next_status_update) > STATUS_POLL_DURATION {
             self.next_status_update += STATUS_POLL_DURATION;
-            if let Err(()) = self.update_status() {
-                error_message = Some("Failed to get status from the Arduino!");
+            if let Err(e) = self.update_status() {
+                error_message = Some(format!("Failed to get status from the Arduino: {e}"));
             };
         }
 

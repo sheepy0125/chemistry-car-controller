@@ -1,80 +1,86 @@
 /*!
- * TO BE OVERHAULED
- * DO NOT WORRY ABOUT IT
- * sheepy0125|mit|some time in 2022
+ * Types for the client
+ * Created by sheepy0125 | MIT License | 2023-02-19
  */
 
-pub const PARSING_SEPARATOR: char = '|';
-pub const COMMAND_SEPARATOR: char = '$';
-pub const READY_PROMPT: &'static str = "READY>";
-pub const OK_RESPONSE_PROMPT: &'static str = "RESP>";
-pub const ERR_RESPONSE_PROMPT: &'static str = "ERR!";
+/***** Setup *****/
+// Imports
+use serde::{Deserialize, Serialize};
+use thiserror::Error as ThisError;
 
-pub const MAXIMUM_INPUT_LENGTH: usize = 64_usize;
-pub const MAXIMUM_ARGUMENT_LENGTH: usize = 48_usize;
-pub const BAUD_RATE: u32 = 57600_u32;
-pub const PRESCALER: u32 = 1024;
-pub const TIMER_COUNTS: u32 = 125;
-pub const MILLIS_INCREMENT: u32 = PRESCALER * TIMER_COUNTS / 16000;
+// Constants
+pub const BAUD_RATE: u32 = 115200_u32;
+
+/***** Error *****/
+#[derive(ThisError, Debug)]
+pub enum Error {
+    #[error("There was an error with parsing: {0}")]
+    ParseError(String),
+}
+impl From<serde_json::Error> for Error {
+    fn from(value: serde_json::Error) -> Self {
+        Self::ParseError(value.to_string())
+    }
+}
 
 /***** Commands *****/
+/* These here are Rust bindings to the commands, arguments, and responses documented
+ * in `readme_data_transmission.md` in the project root.
+ * The commands listed below are between the client to the server and do not interface
+ * with the R41Z, only through. */
+
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Command {
-    Status,
-}
-impl Into<&str> for Command {
-    fn into(self) -> &'static str {
-        use Command::*;
-        match self {
-            Status => "STATUS",
-        }
-    }
-}
-impl TryFrom<&[char]> for Command {
-    type Error = ();
-
-    fn try_from(value: &[char]) -> Result<Self, Self::Error> {
-        use Command::*;
-        match value {
-            ['S', 'T', 'A', 'T', 'U', 'S'] => Ok(Status),
-            _ => Err(()),
-        }
-    }
+    Ping,   // PingArguments, PingResponse
+    Start,  // StartArguments, StartResponse
+    Stop,   // StopArguments, StopResponse
+    Status, // StatusArguments, StatusResponse
 }
 
-pub struct Status {
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PingArguments {
+    /// Unix epoch timestamp
+    pub time: f64,
+}
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PingResponse {
+    /// Unix epoch timestamp
+    pub time: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct StartArguments {
+    /// The distance to travel in centimeters
+    pub distance: f64,
+    /// Whether to spin the motors forward or backward in order to propel the car
+    pub forward: bool,
+    /// Whether to reverse the motors to brake
+    pub reverse_brake: bool,
+}
+pub type StartResponse = ();
+
+pub type StopArguments = ();
+pub type StopResponse = ();
+
+pub type StatusArguments = ();
+#[derive(Serialize, Deserialize, Debug)]
+pub struct StatusResponse {
+    /// Whether the car is running and the motors a turnin'
     pub running: bool,
+    /// The amount of time the server software has been running for in seconds
     pub uptime: usize,
+    /// The amount of the time the car has been running for in seconds.
+    /// If not `running`, this is `0.0`.
+    pub runtime: usize,
+    /// The distance traveled in seconds.
+    /// If not `running`, this is `0.0`.
+    pub distance: f64,
+    /// The latest readings from the accelerometer
+    pub accelerometer_readings: AccelerometerReadings,
 }
-impl TryFrom<&str> for Status {
-    type Error = ();
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        // Get sections to parse
-        let parse_idxs = {
-            const NUMBER_PARSE_IDXS: usize = 2_usize;
-            let mut parse_idxs = [(0_usize, 0_usize); NUMBER_PARSE_IDXS];
-            let mut current_parse_idxs_idx = 0_usize;
-            let mut idx = 0_usize;
-            for character in value.chars() {
-                if character == PARSING_SEPARATOR {
-                    parse_idxs[current_parse_idxs_idx - 1].1 = idx - 1;
-                    current_parse_idxs_idx += 1;
-                    parse_idxs[current_parse_idxs_idx].0 = idx + 1;
-                }
-                idx += 1;
-            }
-            parse_idxs[NUMBER_PARSE_IDXS - 1].1 = idx;
-            parse_idxs
-        };
-
-        // Parse the sections
-        let running = (&value[parse_idxs[0].0..=parse_idxs[0].1])
-            .parse()
-            .map_err(|_| ())?;
-        let uptime = (&value[parse_idxs[1].0..=parse_idxs[1].1])
-            .parse()
-            .map_err(|_| ())?;
-
-        Ok(Self { running, uptime })
-    }
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AccelerometerReadings {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
 }

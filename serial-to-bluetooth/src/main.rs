@@ -9,7 +9,7 @@ use bluer::{gatt::remote::Characteristic, Adapter, AdapterEvent, Address, Device
 use futures::{pin_mut, StreamExt};
 use log::{error, info};
 use serialport::{new as new_serialport, SerialPort};
-use std::{io::Write, time::Duration};
+use std::{env::args, io::Write, time::Duration};
 use tokio::time::sleep;
 
 mod gatt;
@@ -198,11 +198,6 @@ impl SerialBluetoothBridge {
                         }
                         Err(e) => {
                             error!("Failed to find the serial characteristics for {device:?}: {e}");
-                            // Disconnect if needed
-                            // if device.is_connected().await? {
-                            // info!("Disconnecting due to error...");
-                            // device.disconnect().await?;
-                            // }
                         }
                     }
                 }
@@ -336,9 +331,13 @@ impl SerialBluetoothBridge {
 async fn main() -> Result<(), Error> {
     // env_logger::init();
 
+    let serial_port = args().nth(1_usize).expect(
+        "Please enter the serial port device (e.g. `./serial-to-bluetooth.x64 /dev/pts/17`",
+    );
+
     print!("Intializing the serial port... ");
     flush_stdout()?;
-    let serial = SerialBluetoothBridge::initialize_serial_port("/dev/pts/7".into())?;
+    let serial = SerialBluetoothBridge::initialize_serial_port(serial_port)?;
     print!("done!\n");
     print!("Initializing the bluetooth adapter... ");
     flush_stdout()?;
