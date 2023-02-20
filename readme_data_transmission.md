@@ -12,13 +12,11 @@ The data transfer occurs through a request-response model through serial; a comm
 
 A command can be broken up into the following: `<prefix><command>$<arguments>`
 
-The `<prefix>` placeholder determines whether the command is intended for the R41Z to handle or the server:
+The `<prefix>` placeholder determines where the command is intended for:
 
 `?` => Client -> Server
 
 `@` => Server -> R41Z
-
-`>` => Client -> R41Z (unused)
 
 The `<command>` placeholder determines the command and subsequently the type to parse the arguments in. It must be uppercase and a valid command.
 
@@ -28,11 +26,21 @@ The following is an example command: `?PING${"time": 1676868616.121098}`
 
 ### Responses
 
-A response can be broken up into the following: `~<response>`
+A response can be broken up into the following: `<prefix><command>$<response>`
 
-The `~` prefix simply states it to be a response, and there are no other prefixes. Because the written message is not looped, only one command being sent at a time (unless something disastrous happens with super long delays or spamming too quick), and responses only going to the server, there is no need to worry about misinterpreting responses.
+The `<prefix>` placeholder determines where the response came from:
 
-The following is an example response: `~{"time": 1676870077.3424761}`
+`~` => Server -> Client
+
+`#` => R41Z -> Server
+
+`&` => Server -> R41Z
+
+The `<command>` placeholder determines which command was being responsded to. It must be uppercase and a valid command.
+
+The `<response>` placeholder is a JSON object of the response, guaranteed to be parsible into the response type inferred from the command.
+
+The following is an example response: `~PING${"time": 1676870077.3424761}`
 
 ## Requests and responses between the client and server
 

@@ -59,10 +59,8 @@ async fn already_connected_find_serial_characteristics(
     let mut tx_characteristic = None;
     error!("service.characteristics()");
     for char in service.characteristics().await? {
-        error!("char.uuid()");
         let uuid = char.uuid().await?;
-        info!("\tCharacteristic UUID: {}", &uuid);
-        error!("char.all_properties()");
+        // This line crashes, WTF? \/
         // info!("\tCharacteristic data: {:?}", char.all_properties().await?);
         match uuid {
             RX_CHARACTERISTIC_UUID => {
@@ -329,7 +327,7 @@ impl SerialBluetoothBridge {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Error> {
-    // env_logger::init();
+    env_logger::init();
 
     let serial_port = args().nth(1_usize).expect(
         "Please enter the serial port device (e.g. `./serial-to-bluetooth.x64 /dev/pts/17`",
