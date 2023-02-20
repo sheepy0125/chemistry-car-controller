@@ -70,7 +70,7 @@ pub struct StatusResponse {
     /// The amount of time the server software has been running for in seconds
     pub uptime: usize,
     /// The amount of the time the car has been running for in seconds.
-    /// If not `running`, this is `0.0`.
+    /// If not `running`, this is `0`.
     pub runtime: usize,
     /// The distance traveled in seconds.
     /// If not `running`, this is `0.0`.
