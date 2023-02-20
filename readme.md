@@ -19,22 +19,30 @@
 #### USB Volume Cotrol portion
 
 - Be misspelled
-- Be attached ot the side of the Raspbery Pi and connected through USB
+- Be attached to the side of the Raspbery Pi and connected through USB
 - Interact with the Raspberry Pi UI
 
 #### Raspberry Pi 3B portion
+
+**See `readme_data_transmission.md` in the project root**
 
 - Have a 3.5" screen attached
 - Provide a U.I. for the user that is interacted with through the USB Volume Cotrol
 - Relay information to and from the other Raspberry Pi through bluetooth and the R41Z middleman
 
-#### R41Z portion
+#### R41Z portion 
+
+**See `readme_serial_bluetooth_bridge.md` in the project root**
 
 - Be connected to the Raspberry Pi 1B on the car
 - Act as a serial bridge
 - Provide accelerometer readings
 
 #### Raspberry Pi Model B
+
+*Also known as Raspberry Pi 1B*
+
+**See `readme_data_transmission.md` in the project root**
 
 - Be connected to the car
 - Be hooked up to the circuitry of the car

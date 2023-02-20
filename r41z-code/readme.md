@@ -8,7 +8,7 @@ The files in this directory are the ones that have been altered.
 
 This is to act as a bluetooth bridge for a wireless serial connection.
 
-Please see the `serial-to-bluetooth` directory in the project root for more information on how this happens.
+Please see the `readme_serial_bluetooth_bridge.md` file in the project root for more information on how this happens.
 
 ## License information
 
