@@ -4,17 +4,16 @@
  * 2023-02-16
  */
 
-use eframe::{egui::CentralPanel, epaint::vec2, run_native, App, NativeOptions};
 /***** Setup *****/
 // Imports
-use serialport::{available_ports, new as new_serialport, SerialPort, TTYPort};
+use eframe::{egui::CentralPanel, epaint::vec2, run_native, App, NativeOptions};
+use serialport::{new as new_serialport, SerialPort};
 use std::{
     env::args,
     fmt::Display,
     mem::transmute,
     time::{Duration, Instant},
 };
-// #[path="../../shared/types.rs"]
 mod types;
 use types::*;
 

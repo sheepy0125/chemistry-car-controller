@@ -1,7 +1,7 @@
-/*
- * Shared types between the Arduino and the Raspberry Pi
- * Created by sheepy0125
- * 2023-02-15
+/*!
+ * TO BE OVERHAULED
+ * DO NOT WORRY ABOUT IT
+ * sheepy0125|mit|some time in 2022
  */
 
 pub const PARSING_SEPARATOR: char = '|';
