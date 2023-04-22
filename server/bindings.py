@@ -8,6 +8,71 @@ MIT License | 2023-02-20
 # Imports
 from json import dumps
 
+
+### Helper functions ###
+
+
+def unsigned_float(value: float | int | str) -> float:
+    """A non-negative float value.
+
+    :raises ServerException: If the value is not a valid float
+    :raises ServerException: If the value is negative
+    """
+
+    if not isinstance(value, float):
+        try:
+            value = float(value)
+        except Exception as e:
+            raise ServerException(
+                enum_variant=Error.MalformedResponseTypeError, inner=e
+            )
+
+    if value < 0.0:
+        raise ServerException(
+            enum_variant=Error.MalformedResponseTypeError,
+            inner=TypeError(f"Negative unsigned float: {value}"),
+        )
+
+    return value
+
+
+def unsigned_int(value: int | float | str) -> int:
+    """A non-negative integer value.
+
+    :raises ServerException: If the value is not a valid integer
+    :raises ServerException: If the value is negative
+    """
+
+    if not isinstance(value, int):
+        try:
+            value = int(value)
+        except Exception as e:
+            raise ServerException(
+                enum_variant=Error.MalformedResponseTypeError, inner=e
+            )
+
+    if value < 0:
+        raise ServerException(
+            enum_variant=Error.MalformedRequestTypeError,
+            inner=TypeError(f"Negative unsigned integer: {value}"),
+        )
+
+    return value
+
+
+### Classes ###
+
+
+class ServerException(Exception):
+    """A custom server exception"""
+
+    def __init__(self, *args, enum_variant: int, inner: Exception):
+        super().__init__(*args)
+
+        self.enum_variant = enum_variant
+        self.inner = inner
+
+
 ### Enums ###
 
 
@@ -21,11 +86,50 @@ class Enum:
         ...
 
 
+class Error(Enum):
+    """This enum is non serializable"""
+
+    MalformedRequestFailedPrefixParsing = 0
+    MalformedRequestFailedCommandParsing = 1
+    MalformedRequestFailedSeparatorParsing = 2
+    MalformedRequestFailedArgumentsParsing = 3
+    MalformedRequestFailedMetadataParsing = 4
+    MalformedRequestTypeError = 5
+    MalformedRequestOtherError = 6
+    MalformedResponseTypeError = 10
+    MalformedResponseOtherError = 11
+    FailedToStartAlreadyStarted = 21
+    FailedToStartMagnetOdometerFailed = 22
+    FailedToStartMotorControlFailed = 23
+    FailedToStartCouldNotAcquireDistanceLock = 24
+    FailedToStopNotStarted = 25
+    FailedToStopStartThreadWouldNotRespond = 26
+    FailedStatusCouldNotAcquireDistanceLock = 27
+    FailedPingNegativeLatency = 27
+    AnyOtherError = 99
+
+
+class Direction(Enum):
+    """This enum is non serializable"""
+
+    Backward = -1
+    Stopped = 0
+    Forward = 1
+
+
+class GPIOPin(Enum):
+    """This enum is non serializable"""
+
+    MotorControllerForwardPositive = 17  # GPIO_GEN0
+    MotorControllerForwardNegative = 27  # GPIO_GEN2
+    MotorControllerBackwardPositive = 23  # GPIO_GEN4
+    MotorControllerBackwardNegative = 24  # GPIO_GEN5
+    MagnetHallEffectSensor = 25  # GPIO_GEN6
+
+
 class TransitMode(Enum):
     ClientToServerRequest = 0
     ServerToClientResponse = 1
-    ServerToR41ZRequest = 2
-    R41ZToServerResponse = 3
 
     @classmethod
     def lookup_by_prefix(cls, prefix: str) -> int | None:
@@ -43,10 +147,6 @@ class TransitMode(Enum):
                 return cls.ClientToServerRequest
             case "~":
                 return cls.ServerToClientResponse
-            case "#":
-                return cls.R41ZToServerResponse
-            case "@":
-                return cls.ServerToR41ZRequest
             case _:
                 return None
 
@@ -57,10 +157,6 @@ class TransitMode(Enum):
                 return "?"
             case cls.ServerToClientResponse:
                 return "~"
-            case cls.R41ZToServerResponse:
-                return "#"
-            case cls.ServerToR41ZRequest:
-                return "@"
             case _:
                 return None
 
@@ -83,13 +179,7 @@ class TransitType(Enum):
         match prefix:
             case "?":
                 return cls.Request
-            case "@":
-                return cls.Request
-            case "#":
-                return cls.Response
             case "~":
-                return cls.Response
-            case "&":
                 return cls.Response
             case _:
                 return None
@@ -99,7 +189,9 @@ class Command(Enum):
     Ping = 0
     Start = 1
     Stop = 2
-    Status = 3
+    StaticStatus = 3
+    Status = 4
+    Unknown = 99
 
     @classmethod
     def lookup_by_name(cls, name: str) -> int | None:
@@ -113,8 +205,12 @@ class Command(Enum):
                 return cls.Start
             case "STOP":
                 return cls.Stop
+            case "STATICSTATUS":
+                return cls.StaticStatus
             case "STATUS":
                 return cls.Status
+            case "UNKNOWN":
+                return cls.Unknown
             case _:
                 return None
 
@@ -131,6 +227,10 @@ class Command(Enum):
                 return "STOP"
             case cls.Status:
                 return "STATUS"
+            case cls.StaticStatus:
+                return "STATICSTATUS"
+            case cls.Unknown:
+                return "UNKNOWN"
             case _:
                 return None
 
@@ -142,30 +242,48 @@ class SerializableStruct:
     def __init__(self, *_args, **_kwargs):
         ...
 
+    @property
     def __dict__(self) -> dict:
         return {}
 
     def __str__(self) -> str:
-        return dumps(self.__dict__())
+        return dumps(self.__dict__)
+
+
+# Metadata
+
+
+class MetaData:
+    def __init__(self, time: float):
+        self.time = unsigned_float(time)
+
+    @property
+    def __dict__(self) -> dict:
+        return {"time": self.time}
+
+
+# Error
+
+
+class ErrorResponse(SerializableStruct):
+    def __init__(self, error_variant: int, message: str):
+        self.error_variant = error_variant
+        self.message = message
+
+    @property
+    def __dict__(self) -> dict:
+        return {"error_variant": self.error_variant, "message": self.message}
 
 
 # Ping
 
 
 class PingArguments(SerializableStruct):
-    def __init__(self, time: float):
-        self.time = float(time)
-
-    def __dict__(self) -> dict:
-        return {"time": self.time}
+    ...
 
 
 class PingResponse(SerializableStruct):
-    def __init__(self, time: float):
-        self.time = float(time)
-
-    def __dict__(self) -> dict:
-        return {"time": self.time}
+    ...
 
 
 # Start
@@ -173,14 +291,15 @@ class PingResponse(SerializableStruct):
 
 class StartArguments(SerializableStruct):
     def __init__(self, distance: float, forward: bool, reverse_brake: bool):
-        self.distance = float(distance)
+        self.distance = unsigned_float(distance)
         self.forward = bool(forward)
         self.reverse_brake = bool(reverse_brake)
 
+    @property
     def __dict__(self) -> dict:
         return {
             "distance": self.distance,
-            "forward": self.foward,
+            "forward": self.forward,
             "reverse_brake": self.reverse_brake,
         }
 
@@ -200,17 +319,47 @@ class StopResponse(SerializableStruct):
     ...
 
 
-# Status
+# Static status
 
 
-class AccelerometerReadings(SerializableStruct):
-    def __init__(self, x: float, y: float, z: float):
-        self.x = float(x)
-        self.y = float(y)
-        self.z = float(z)
+class StaticStatusArguments(SerializableStruct):
+    ...
 
+
+class StaticStatusResponse(SerializableStruct):
+    def __init__(self, number_of_magnets: int, wheel_diameter: float):
+        self.number_of_magnets = number_of_magnets
+        self.wheel_diameter = wheel_diameter
+
+    @property
     def __dict__(self) -> dict:
-        return {"x": self.x, "y": self.y, "z": self.z}
+        return {
+            "number_of_magnets": self.number_of_magnets,
+            "wheel_diameter": self.wheel_diameter,
+        }
+
+
+# Dynamic (regular) status
+
+
+class DistanceInformation(SerializableStruct):
+    def __init__(
+        self,
+        distance: float,
+        velocity: float,
+        magnet_hit_counter: int,
+    ):
+        self.distance = unsigned_float(distance)
+        self.velocity = unsigned_float(velocity)
+        self.magnet_hit_counter = unsigned_int(magnet_hit_counter)
+
+    @property
+    def __dict__(self) -> dict:
+        return {
+            "distance": self.distance,
+            "velocity": self.velocity,
+            "magnet_hit_counter": self.magnet_hit_counter,
+        }
 
 
 class StatusArguments(SerializableStruct):
@@ -223,26 +372,25 @@ class StatusResponse(SerializableStruct):
         running: bool,
         uptime: int,
         runtime: int,
-        distance: float,
-        accelerometer_readings: AccelerometerReadings,
+        distance: DistanceInformation,
     ):
         self.running = bool(running)
-        self.uptime = int(uptime)
-        self.runtime = int(runtime)
-        self.distance = float(distance)
-        self.accelerometer_readings = dict(accelerometer_readings)
+        self.uptime = unsigned_int(uptime)
+        self.runtime = unsigned_int(runtime)
+        self.distance = distance.__dict__
 
+    @property
     def __dict__(self) -> dict:
         return {
             "running": self.running,
             "uptime": self.uptime,
             "runtime": self.runtime,
             "distance": self.distance,
-            "accelerometer_readings": self.accelerometer_readings,
         }
 
 
 ### Lookup tables ###
+
 
 COMMAND_SERIALIZABLE_LUT = {
     Command.Ping: {
@@ -260,5 +408,9 @@ COMMAND_SERIALIZABLE_LUT = {
     Command.Status: {
         TransitType.Request: StatusArguments,
         TransitType.Response: StatusResponse,
+    },
+    Command.StaticStatus: {
+        TransitType.Request: StaticStatusArguments,
+        TransitType.Response: StaticStatusResponse,
     },
 }
