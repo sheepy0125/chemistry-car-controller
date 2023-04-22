@@ -1,0 +1,14 @@
+{
+    "cSpell.words": [
+        "eframe",
+        "egui",
+        "epaint",
+        "repr",
+        "serialport",
+        "STATICSTATUS"
+    ],
+    "rust-analyzer.linkedProjects": [
+        "./client/Cargo.toml",
+        "./serial-to-bluetooth/Cargo.toml"
+    ]
+}

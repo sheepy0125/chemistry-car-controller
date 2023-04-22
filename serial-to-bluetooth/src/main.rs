@@ -57,7 +57,6 @@ async fn already_connected_find_serial_characteristics(
     // Find serial characteristics
     let mut rx_characteristic = None;
     let mut tx_characteristic = None;
-    error!("service.characteristics()");
     for char in service.characteristics().await? {
         let uuid = char.uuid().await?;
         // This line crashes, WTF? \/
@@ -276,7 +275,7 @@ impl SerialBluetoothBridge {
 
     /***** Serial handlers *****/
 
-    /// Intialize the serial port
+    /// Initialize the serial port
     pub fn initialize_serial_port(device: String) -> Result<Box<dyn SerialPort>, Error> {
         let serial = new_serialport(device, BAUD_RATE)
             .timeout(Duration::from_millis(500_u64))

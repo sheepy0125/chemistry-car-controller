@@ -11,7 +11,7 @@ use std::io::Error as IoError;
 use thiserror::Error as ThisError;
 
 // Constants
-pub const POLL_DELAY: u64 = 50; // Milliseconds
+pub const POLL_DELAY: u64 = 20; // Milliseconds
 
 /***** Enums *****/
 
