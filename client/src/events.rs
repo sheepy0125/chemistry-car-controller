@@ -7,15 +7,10 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /***** Setup *****/
 // Imports
-use crate::{
-    bindings::{
-        ClientError, Command, ErrorResponse, MetaData, PingResponse, Response, ServerError,
-        StartResponse, StaticStatusResponse, StatusResponse, StopResponse, TransitMode,
-        TransitType,
-    },
-    shared::SERIAL_DELAY_TIME,
+use crate::bindings::{
+    ClientError, Command, ErrorResponse, MetaData, PingResponse, Response, StartResponse,
+    StaticStatusResponse, StatusResponse, StopResponse, TransitMode, TransitType,
 };
-use chrono::Local;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str as serde_from_str, to_string as serde_to_string};
 use serialport::SerialPort;

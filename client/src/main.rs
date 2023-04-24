@@ -5,21 +5,19 @@
 
 /***** Setup *****/
 // Imports
-use chrono::{DateTime, Local, TimeZone};
+use chrono::{DateTime, Local};
 use eframe::{epaint::vec2, run_native, App, NativeOptions};
 use egui::{
-    panel::Side, Align, Button, CentralPanel, Checkbox, Context, Label, Layout, SidePanel, Slider,
-    Style, TopBottomPanel, Ui, Visuals, Window,
+    Align, Button, Checkbox, Context, Label, Layout, SidePanel, Slider, TopBottomPanel, Ui,
+    Visuals, Window,
 };
 use egui_extras::{Column, TableBuilder};
-use serialport::{new as new_serialport, SerialPort};
+use serialport::new as new_serialport;
 use smart_default::SmartDefault;
 use std::{
-    default,
     env::args,
     f64::consts::PI,
-    fmt::Display,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 mod bindings;
 use bindings::*;
@@ -351,7 +349,7 @@ impl ClientGUIHandlers for ClientGUI {
     }
 }
 impl App for ClientGUI {
-    fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         self.logic();
 
         // Show error messages
@@ -392,11 +390,15 @@ impl App for ClientGUI {
 
                 /* Distance input */
 
+                let distance: f64 = self.gui_data.distance.clone();
                 ui.separator();
                 ui.label("Distance in centimeters");
                 ui.add(Slider::new(
                     &mut self.gui_data.distance,
-                    0.0..=MAX_DISTANCE_RANGE_CENTIMETERS,
+                    0.0..=match distance > MAX_DISTANCE_RANGE_CENTIMETERS {
+                        true => distance,
+                        false => MAX_DISTANCE_RANGE_CENTIMETERS,
+                    },
                 ));
                 // Increment buttons
                 let increment_button_size = [70., 50.];
@@ -418,9 +420,9 @@ impl App for ClientGUI {
                         .clicked()
                     {
                         self.gui_data.distance += 10.0;
-                        if self.gui_data.distance > MAX_DISTANCE_RANGE_CENTIMETERS {
-                            self.gui_data.distance = MAX_DISTANCE_RANGE_CENTIMETERS;
-                        }
+                        // if self.gui_data.distance > MAX_DISTANCE_RANGE_CENTIMETERS {
+                        // self.gui_data.distance = MAX_DISTANCE_RANGE_CENTIMETERS;
+                        // }
                     }
                 });
                 ui.horizontal(|ui| {
@@ -439,9 +441,9 @@ impl App for ClientGUI {
                         .clicked()
                     {
                         self.gui_data.distance += 100.0;
-                        if self.gui_data.distance > MAX_DISTANCE_RANGE_CENTIMETERS {
-                            self.gui_data.distance = MAX_DISTANCE_RANGE_CENTIMETERS;
-                        }
+                        // if self.gui_data.distance > MAX_DISTANCE_RANGE_CENTIMETERS {
+                        // self.gui_data.distance = MAX_DISTANCE_RANGE_CENTIMETERS;
+                        // }
                     }
                 });
 
