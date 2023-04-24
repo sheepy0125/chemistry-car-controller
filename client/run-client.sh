@@ -15,6 +15,7 @@ CLIENT_PTY="${SERIAL_DEVS_ARR[1]}"
 
 echo "=== Starting serial bridge"
 pushd serial-to-bluetooth
+# nohup cargo run $BRIDGE_PTY 2>/dev/null > bridge.log &
 nohup cargo run $BRIDGE_PTY 2>/dev/null > bridge.log &
 BRIDGE_PROCESS=$!
 (tail -f bridge.log &) | grep -q "Connecting to the Wireless UART device... done!"

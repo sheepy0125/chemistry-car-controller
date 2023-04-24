@@ -121,6 +121,8 @@ impl SerialEventPropagator {
         };
         let stringified_metadata =
             serde_to_string(&metadata).map_err(|e| ClientError::Parse(e.to_string()))?;
+
+        let to_send = format!("{prefix}{command}${stringified_data}${stringified_metadata}");
         writeln!(
             self.serial,
             "{prefix}{command}${stringified_data}${stringified_metadata}"
@@ -152,7 +154,8 @@ impl SerialEventPropagator {
         }
 
         // Find the command
-        let split_data = data.split('$').collect::<Vec<_>>();
+        let split_data = data.trim().split('$').collect::<Vec<_>>();
+        println!("{split_data:?}");
         let command = Command::try_from(split_data[0][1..].to_string())?;
 
         // Find the metadata

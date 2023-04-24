@@ -155,7 +155,8 @@ def start_thread(arguments: StartArguments):
 
     if not MutexStartData.distance_information_lock.acquire(timeout=1.0):
         raise ServerException(
-            enum_variant=Error.FailedToStartCouldNotAcquireDistanceLock
+            enum_variant=Error.FailedToStartCouldNotAcquireDistanceLock,
+            inner=RuntimeError("The distance lock simply was left acquired"),
         )
 
     while MutexStartData.started_flag.is_set():
@@ -209,6 +210,10 @@ def stop(*_args, stop_start_thread: bool = True, **_kwargs) -> StopResponse:
     MutexStartData.started_flag.clear()
     if stop_start_thread:
         MutexStartData.start_thread.join()
+    try:
+        MutexStartData.distance_information_lock.release()
+    except Exception:
+        ...
 
     Motor.stop()
 

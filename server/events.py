@@ -87,9 +87,9 @@ class SerialEventPropagator:
     def __init__(self, serial_port: str, callbacks_lut: dict[int, callable]):
         try:
             self.serial = self.connect_to_serial(serial_port)
-        except Exception as e:
+        except Exception:
             Logger.fatal("Failed to connect to the serial connection")
-            raise ServerException(enum_variant=Error.AnyOtherError, inner=e)
+            raise
         Logger.info(f"Connected to serial port {serial_port}")
         self.callbacks_lut = callbacks_lut
 
@@ -111,6 +111,7 @@ class SerialEventPropagator:
         """
 
         bytes_available = self.serial.in_waiting
+
         if bytes_available == 0:
             return None
 
@@ -368,10 +369,11 @@ class SerialEventPropagator:
 
                 if parsed_rx is not None:
                     event = parsed_rx
+                    event.command = Command.Unknown
                     event.value = error
                 else:
                     event = SerialEvent(
-                        command=Command.Error,
+                        command=Command.Unknown,
                         transit_type=TransitType.Response,  # Doesn't matter lol
                         transit_mode=TransitMode.ClientToServerRequest,  # Will be flopped
                         value=error,
@@ -473,4 +475,4 @@ class GPIOEventPropagator:
                 f'Failed to call callback for event on GPIO {pin}: {"HIGH" if value else "LOW"}'
             )
             Logger.log_error(e)
-            raise ServerException(enum_variant=Error.AnyOtherError, inner=e)
+            raise

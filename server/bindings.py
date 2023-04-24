@@ -191,7 +191,7 @@ class Command(Enum):
     Stop = 2
     StaticStatus = 3
     Status = 4
-    Error = 99
+    Unknown = Error = 99
 
     @classmethod
     def lookup_by_name(cls, name: str) -> int | None:

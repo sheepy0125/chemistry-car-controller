@@ -505,53 +505,117 @@ impl App for ClientGUI {
 
                 ui.separator();
                 if let Some(static_status) = &self.run_data.static_status_response {
-                    ui.label(format!(
-                        "Number of magnets: {}",
-                        static_status.value.number_of_magnets,
-                    ));
-                    ui.label(format!(
-                        "Wheel diameter {:.3}in / {:.3}cm",
-                        static_status.value.wheel_diameter / 2.54,
-                        static_status.value.wheel_diameter,
-                    ));
-                    ui.label(format!(
-                        "Wheel circumference: {:.3}in / {:.3}cm",
-                        (static_status.value.wheel_diameter * PI) / 2.54,
-                        static_status.value.wheel_diameter * PI,
-                    ));
+                    ui.push_id("static status table", |ui| {
+                        let static_status_table = TableBuilder::new(ui)
+                            .striped(true)
+                            .resizable(false)
+                            .cell_layout(Layout::left_to_right(Align::Center))
+                            .column(Column::auto()) // Number of magnets
+                            .column(Column::auto()) // Wheel diameter inches
+                            .column(Column::auto()) // Wheel diameter centimeters
+                            .min_scrolled_height(0.0);
+
+                        static_status_table
+                            .header(20.0, |mut header| {
+                                header.col(|ui| {
+                                    ui.strong("Magnets");
+                                });
+                                header.col(|ui| {
+                                    ui.strong("Diameter");
+                                });
+                                header.col(|ui| {
+                                    ui.strong("Circumference");
+                                });
+                            })
+                            .body(|mut body| {
+                                body.row(18.0, |mut row| {
+                                    row.col(|ui| {
+                                        ui.label(format!(
+                                            "{}",
+                                            static_status.value.number_of_magnets
+                                        ));
+                                    });
+                                    row.col(|ui| {
+                                        ui.label(format!(
+                                            "{:.3}in / {:.3}cm",
+                                            static_status.value.wheel_diameter / 2.54,
+                                            static_status.value.wheel_diameter
+                                        ));
+                                    });
+                                    row.col(|ui| {
+                                        ui.label(format!(
+                                            "{:.3}in / {:.3}cm",
+                                            (static_status.value.wheel_diameter * PI) / 2.54,
+                                            static_status.value.wheel_diameter * PI,
+                                        ));
+                                    });
+                                });
+                            });
+                    });
                 } else {
                     ui.label("No static status available");
-                    ui.label(""); // filler space
-                    ui.label(""); // filler space
                 }
 
                 /* Dynamic status */
                 if let Some(latest_and_greatest_status) = self.run_data.status_responses.last() {
-                    ui.label(format!(
-                        "Running: {}",
-                        match latest_and_greatest_status.value.running {
-                            true => "YES",
-                            false => "NO",
-                        }
-                    ));
-                    ui.label(format!(
-                        "Uptime: {}",
-                        latest_and_greatest_status.value.uptime
-                    ));
-                    ui.label(format!(
-                        "Runtime: {}",
-                        latest_and_greatest_status.value.runtime
-                    ));
-                    ui.label(format!(
-                        "Last received: {:.3}seconds ago",
-                        (Local::now().timestamp_millis() as f64)
-                            - latest_and_greatest_status.metadata.time
-                    ));
+                    ui.push_id("dynamic status latest and greatest status table", |ui| {
+                        let latest_and_greatest_status_table = TableBuilder::new(ui)
+                            .striped(true)
+                            .resizable(false)
+                            .cell_layout(Layout::left_to_right(Align::Center))
+                            .column(Column::auto()) // Running
+                            .column(Column::auto()) // Uptime
+                            .column(Column::auto()) // Runtime
+                            .column(Column::remainder()) // Last received
+                            .min_scrolled_height(0.0);
+
+                        latest_and_greatest_status_table
+                            .header(20.0, |mut header| {
+                                header.col(|ui| {
+                                    ui.strong("Running");
+                                });
+                                header.col(|ui| {
+                                    ui.strong("Uptime");
+                                });
+                                header.col(|ui| {
+                                    ui.strong("Runtime");
+                                });
+                                header.col(|ui| {
+                                    ui.strong("Last received");
+                                });
+                            })
+                            .body(|mut body| {
+                                body.row(18.0, |mut row| {
+                                    row.col(|ui| {
+                                        ui.label(match latest_and_greatest_status.value.running {
+                                            true => "YES",
+                                            false => "NO",
+                                        });
+                                    });
+                                    row.col(|ui| {
+                                        ui.label(format!(
+                                            "{}",
+                                            latest_and_greatest_status.value.uptime
+                                        ));
+                                    });
+                                    row.col(|ui| {
+                                        ui.label(format!(
+                                            "{}",
+                                            latest_and_greatest_status.value.runtime
+                                        ));
+                                    });
+                                    row.col(|ui| {
+                                        ui.label(format!(
+                                            " {:.1} seconds ago",
+                                            ((Local::now().timestamp_millis() as f64) / 1000.0)
+                                                - latest_and_greatest_status.metadata.time
+                                        ));
+                                    });
+                                });
+                            });
+                    });
                 } else {
-                    ui.label("No status available");
-                    ui.label(""); // filler
-                    ui.label(""); // filler
-                    ui.label(""); // filler
+                    ui.label("No dynamic status available");
                 }
 
                 ui.separator();
@@ -568,7 +632,9 @@ impl App for ClientGUI {
                     // The table is rendered outside of this current UI in
                     // the right panel for it to freely move around
                 } else {
-                    self.show_status_table(ui);
+                    ui.push_id("dynamic status history table", |ui| {
+                        self.show_status_table(ui);
+                    });
                 }
             });
 

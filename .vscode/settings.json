@@ -7,7 +7,8 @@
         "repr",
         "scip",
         "serialport",
-        "STATICSTATUS"
+        "STATICSTATUS",
+        "Uart"
     ],
     "rust-analyzer.linkedProjects": [
         "./client/Cargo.toml",
