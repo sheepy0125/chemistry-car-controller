@@ -155,8 +155,8 @@ impl SerialBluetoothBridge {
 
     /***** Bluetooth handlers *****/
 
-    /// Intialize the bluetooth adapter
-    pub async fn intialize_bluetooth_adapter() -> Result<Adapter, Error> {
+    /// Initialize the bluetooth adapter
+    pub async fn initialize_bluetooth_adapter() -> Result<Adapter, Error> {
         let session = bluer::Session::new().await?;
 
         let adapter = session.default_adapter().await?;
@@ -242,7 +242,7 @@ impl SerialBluetoothBridge {
     ///
     /// Assumes the character fits in a `u8`
     pub async fn write_to_bluetooth_device(&mut self, data: String) -> Result<usize, Error> {
-        info!("Writing {data} to bluetooth device");
+        println!("Writing {data} to bluetooth device");
 
         // Chunk it
         let mut characters_count = 0_usize;
@@ -332,13 +332,13 @@ async fn main() -> Result<(), Error> {
         "Please enter the serial port device (e.g. `./serial-to-bluetooth.x64 /dev/pts/17`",
     );
 
-    print!("Intializing the serial port... ");
+    print!("Initializing the serial port... ");
     flush_stdout()?;
     let serial = SerialBluetoothBridge::initialize_serial_port(serial_port)?;
     print!("done!\n");
     print!("Initializing the bluetooth adapter... ");
     flush_stdout()?;
-    let mut bluetooth_adapter = SerialBluetoothBridge::intialize_bluetooth_adapter().await?;
+    let mut bluetooth_adapter = SerialBluetoothBridge::initialize_bluetooth_adapter().await?;
     print!("done!\n");
     print!("Connecting to the Wireless UART device... ");
     flush_stdout()?;
