@@ -1,396 +1,574 @@
 /*
  * The Raspberry PI 3B GUI for car controller
- * Created by sheepy0125
- * 2023-02-16
+ * Created by sheepy0125 | MIT license | 2023-02-16
  */
 
 /***** Setup *****/
 // Imports
-use eframe::{
-    egui::{Button, CentralPanel, Slider, TopBottomPanel, Ui},
-    epaint::vec2,
-    run_native, App, NativeOptions,
+use chrono::{DateTime, Local, TimeZone};
+use eframe::{epaint::vec2, run_native, App, NativeOptions};
+use egui::{
+    panel::Side, Align, Button, CentralPanel, Checkbox, Context, Label, Layout, SidePanel, Slider,
+    Style, TopBottomPanel, Ui, Visuals, Window,
 };
+use egui_extras::{Column, TableBuilder};
 use serialport::{new as new_serialport, SerialPort};
+use smart_default::SmartDefault;
 use std::{
+    default,
     env::args,
+    f64::consts::PI,
     fmt::Display,
-    mem::transmute,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 mod bindings;
 use bindings::*;
 mod events;
 use events::*;
+mod shared;
+use shared::*;
 
-// Constants
-const STATUS_POLL_DURATION: Duration = Duration::from_millis(1000);
-const SHOULD_REVERSE_BRAKE: bool = true;
-const SHOULD_GO_FORWARD: bool = true;
+/***** Client *****/
 
-/***** Helper functions *****/
-fn log_error<E>(e: E)
-where
-    E: Display,
-{
-    println!("{e}");
+/// Error message data
+pub struct ErrorData {
+    pub error: ClientError,
+    pub time: DateTime<Local>,
 }
-
-/***** Pages *****/
-#[repr(u8)]
-#[derive(Copy, Clone)]
-enum Pages {
-    Start = 0_u8,
-    /// Input the distance to travel
-    DistanceInput = 1_u8,
-    /// General status of the car (and e-stop)
-    Status = 2_u8,
-    /// Car has been stopped
-    Stopped = 3_u8,
-    End = 4_u8,
-}
-impl TryFrom<u8> for Pages {
-    type Error = ();
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        // Ensure not out of bounds
-        if value > Self::End as u8 {
-            Err(())?;
-        }
-        // Safety: not out of bounds
-        Ok(unsafe { transmute((Self::Start as u8) + value) })
-    }
-}
-impl Pages {
-    fn at_boundary(option: &Pages) -> bool {
-        use Pages::*;
-        match *option {
-            Start => true,
-            End => true,
-            _ => false,
-        }
-    }
-
-    fn next(option: &Pages) -> Option<Pages> {
-        let next_option = Pages::try_from((*option as u8) + 1_u8).ok()?;
-        if Self::at_boundary(&next_option) {
-            None?;
-        }
-        Some(next_option)
-    }
-
-    fn previous(option: &Pages) -> Option<Pages> {
-        let option_u8 = *option as u8;
-        // Ensure no underflow
-        if option_u8 == 0 {
-            None?;
-        }
-        let previous_option = Pages::try_from(option_u8 - 1_u8).ok()?;
-        if Self::at_boundary(&previous_option) {
-            None?;
-        }
-        Some(previous_option)
-    }
-}
-
-/// What the button to go to the next page should show
-enum NextPageButton {
-    /// Show `Next`
-    Regular,
-    /// Show custom text
-    Custom(&'static str),
-    /// None
-    NoNextPage,
-}
-
-/***** Client data *****/
-struct ClientData {
-    started: bool,
-    start_response: Option<Event<StartResponse>>,
-    /// Will be `None` every time no data is read from the serial
-    rx: Option<String>,
-    /// Distance is in centimeters
-    distance: Option<f32>,
-    static_status: Option<Event<StaticStatusResponse>>,
-    status: Option<Event<StatusResponse>>,
-    sent_static_status: bool,
-    sent_stop_request: bool,
-}
-impl Default for ClientData {
-    fn default() -> Self {
+impl ErrorData {
+    pub fn new(error: ClientError) -> Self {
         Self {
-            distance: None,
-            static_status: None,
-            status: None,
-            rx: None,
-            sent_static_status: false,
-            started: false,
-            start_response: None,
-            sent_stop_request: false,
+            error,
+            time: Local::now(),
         }
     }
 }
-
-/***** Client GUI *****/
-trait ClientGUIHandlers {
-    fn new(serial_event_propagator: SerialEventPropagator) -> Self;
-    fn distance_input_page(&mut self, ctx: &mut Ui) -> NextPageButton;
-    fn stopped_page(&mut self, ctx: &mut Ui) -> NextPageButton;
-    fn status_page(&mut self, ctx: &mut Ui) -> NextPageButton;
+impl From<ClientError> for ErrorData {
+    fn from(value: ClientError) -> Self {
+        Self::new(value)
+    }
 }
-struct ClientGUI {
-    serial_event_propagator: SerialEventPropagator,
-    status: Option<StatusResponse>,
-    next_status_update: Instant,
-    selected_option: Pages,
-    data: ClientData,
-    error_message: Option<String>,
+
+/// GUI data
+#[derive(SmartDefault)]
+pub struct GUIData {
+    /// Distance in centimeters
+    #[default = 0.0]
+    pub distance: f64,
+    #[default = false]
+    pub reverse_braking: bool,
+    #[default = false]
+    pub expanded_status_table: bool,
+    pub current_job: ClientStatus,
+}
+
+/// Possible values for the large button
+pub enum LargeButton {
+    Start,
+    Reset,
+    Stop,
+}
+impl ToString for LargeButton {
+    fn to_string(&self) -> String {
+        match *self {
+            Self::Start => "START",
+            Self::Reset => "RESET",
+            Self::Stop => "STOP",
+        }
+        .to_owned()
+    }
+}
+
+pub trait ClientGUIHandlers {
+    fn new(serial_event_propagator: SerialEventPropagator) -> Self;
+    fn get_serial_responses(&mut self) -> Result<(), ClientError>;
+    fn show_error_messages(&mut self, ctx: &Context);
+    fn show_status_table(&self, ui: &mut Ui);
+    fn logic(&mut self);
+    fn start(&mut self);
+    fn stop(&mut self);
+    fn reset(&mut self);
+}
+pub struct ClientGUI {
+    pub serial_event_propagator: SerialEventPropagator,
+    pub run_data: RunData,
+    pub gui_data: GUIData,
+    pub errors: Vec<ErrorData>,
 }
 impl ClientGUIHandlers for ClientGUI {
     fn new(serial_event_propagator: SerialEventPropagator) -> Self {
         Self {
             serial_event_propagator,
-            status: None,
-            next_status_update: Instant::now(),
-            selected_option: Pages::next(&Pages::Start).unwrap(),
-            data: ClientData::default(),
-            error_message: None,
+            run_data: Default::default(),
+            gui_data: Default::default(),
+            errors: Default::default(),
         }
     }
 
-    fn distance_input_page(&mut self, ui: &mut Ui) -> NextPageButton {
-        let mut distance = self.data.distance.unwrap_or_default();
+    /// Show error messages
+    ///
+    /// Assumes there are error messages, otherwise the window it shows would be
+    /// pretty useless
+    fn show_error_messages(&mut self, ctx: &Context) {
+        Window::new("Errors!").resizable(false).show(ctx, |ui| {
+            ui.heading(match self.errors.len() {
+                0 => unreachable!(),
+                1 => "An error has occurred!",
+                2..=5 => "Some errors have occurred!",
+                _ => "Something has *definitely* gone wrong!",
+            });
 
-        ui.heading("Input distance");
-        ui.horizontal(|ui| {
-            ui.label("Centimeters");
-            if ui.button("/\\").clicked() {
-                distance += 10.0_f32;
-                if distance > 2_000.0_f32 {
-                    distance = 2_000.0_f32;
-                }
-            }
-            if ui.button("\\/").clicked() {
-                distance -= 10.0_f32;
-                if distance < 0.0_f32 {
-                    distance = 0.0_f32;
-                }
-            }
-        });
-        ui.add(Slider::new(&mut distance, 0.0f32..=2_000.0_f32));
+            let clear_errors_button_size = [60., 40.];
+            if ui
+                .add_sized(clear_errors_button_size, Button::new("Clear"))
+                .clicked()
+            {
+                self.errors.clear();
+            };
 
-        if distance != 0.0_f32 {
-            self.data.distance = Some(distance);
-            NextPageButton::Custom("Start car")
-        } else {
-            NextPageButton::NoNextPage
-        }
-    }
+            let errors_table = TableBuilder::new(ui)
+                .striped(true)
+                .resizable(false)
+                .cell_layout(Layout::left_to_right(Align::Center))
+                .column(Column::auto())
+                .column(Column::remainder())
+                .min_scrolled_height(0.0);
 
-    fn stopped_page(&mut self, ui: &mut Ui) -> NextPageButton {
-        // Send stop request if we haven't already
-        if !self.data.sent_stop_request {
-            self.serial_event_propagator
-                .write_to_serial(Command::Stop, StopArguments {})
-                .unwrap();
-            self.data.sent_stop_request = true;
-        }
-
-        ui.label("A stop signal has been sent.");
-
-        NextPageButton::Custom("Restart")
-    }
-
-    fn status_page(&mut self, ui: &mut Ui) -> NextPageButton {
-        // Get static status if we haven't already
-        if !self.data.sent_static_status {
-            self.serial_event_propagator
-                .write_to_serial(Command::StaticStatus, StaticStatusArguments {})
-                .unwrap();
-            self.data.sent_static_status = true;
-            self.data.rx = None;
-        }
-        // We've sent the request but not received it
-        else if let None = self.data.static_status {
-            if let Some(data) = &self.data.rx {
-                let parsed =
-                    SerialEventPropagator::parse_response::<StaticStatusResponse>(data).unwrap();
-                self.data.static_status = match parsed {
-                    Ok(parsed) => Some(parsed),
-                    Err(e) => {
-                        self.error_message = Some(format!(
-                            "Error getting static status: {:?}: {}",
-                            ServerError::try_from(e.value.error_variant)
-                                .unwrap_or(ServerError::AnyOtherError),
-                            e.value.message
-                        ));
-                        None
+            errors_table
+                .header(20.0, |mut header| {
+                    header.col(|ui| {
+                        ui.strong("Time");
+                    });
+                    header.col(|ui| {
+                        ui.strong("Error");
+                    });
+                })
+                .body(|mut body| {
+                    for error in self.errors.iter() {
+                        let error_text = error.error.to_string();
+                        body.row(18.0, |mut row| {
+                            row.col(|ui| {
+                                ui.label(error.time.format("%H:%M:%S").to_string());
+                            });
+                            row.col(|ui| {
+                                ui.add(
+                                    Label::new(error_text)
+                                        .wrap(false /* FIXME: fix wrapping */),
+                                );
+                            });
+                        });
                     }
-                };
+                })
+        });
+    }
+
+    /// Read the serial port for any response and parse it, placing it in `self.run_data`
+    fn get_serial_responses(&mut self) -> Result<(), ClientError> {
+        // Get down if available
+        let data = match self.serial_event_propagator.read_from_serial()? {
+            Some(data) => data,
+            None => return Ok(()),
+        };
+
+        // Parse into a response
+        let parsed_response = SerialEventPropagator::parse_response(&data[..])?;
+
+        // Add to corresponding run data
+        use Response::*;
+        match parsed_response {
+            Ping(resp) => {
+                self.run_data.ping_status_response = Some((
+                    Box::new(resp),
+                    (Local::now().timestamp_millis() as f64) / 1000.0,
+                ))
             }
-            self.data.rx = None;
+            StaticStatus(resp) => self.run_data.static_status_response = Some(Box::new(resp)),
+            Status(resp) => self.run_data.status_responses.push(resp),
+            Error(resp) => self.errors.push(ErrorData::new(ClientError::Server(format!(
+                "{}: {}",
+                ServerError::try_from(resp.value.error_variant)
+                    .unwrap_or(ServerError::AnyOtherError)
+                    .to_string(),
+                resp.value.message
+            )))),
+            _ => self.run_data.other_responses.push(parsed_response),
+        };
+
+        Ok(())
+    }
+
+    /// All logic that is run every time the window is updated (i.e. every frame)
+    fn logic(&mut self) {
+        // Receive new serial information if needed
+        {
+            // `Instant::elapsed()` *does* exist, but if we are going to update
+            // the last_get_time with the current time instead of just adding the
+            // delay to it, then it's practical to just get the current time here
+            // and use `Instant::duration_since(...)`
+            let current_time = Instant::now();
+            if current_time.duration_since(self.serial_event_propagator.last_get_time)
+                > Duration::from_secs_f64(SERIAL_DELAY_TIME)
+            {
+                self.get_serial_responses()
+                    .unwrap_or_else(|e| self.errors.push(e.into()));
+                self.serial_event_propagator.last_get_time = current_time
+            }
         }
 
-        // Start the car after we have received static status
-        if self.data.static_status.is_some() && !self.data.started {
-            self.serial_event_propagator
-                .write_to_serial(
-                    Command::Start,
-                    StartArguments {
-                        distance: self.data.distance.unwrap(),
-                        reverse_brake: SHOULD_REVERSE_BRAKE,
-                        forward: SHOULD_GO_FORWARD,
+        // Handle current job / status
+        use ClientStatus::*;
+        match self.gui_data.current_job {
+            GatheringData => Ok(()),
+            SendingPing => {
+                self.gui_data.current_job = self.gui_data.current_job.next();
+                self.serial_event_propagator.write_to_serial(
+                    Command::Ping,
+                    PingArguments {
+                        time: (Local::now().timestamp_millis() as f64) / 1000.0,
                     },
                 )
-                .unwrap();
-            self.data.started = true;
-            self.data.rx = None;
-        }
-        // We've sent the request but not received it
-        else if let None = self.data.start_response {
-            if let Some(data) = &self.data.rx {
-                let parsed = SerialEventPropagator::parse_response::<StartResponse>(data).unwrap();
-                self.data.start_response = match parsed {
-                    Ok(parsed) => Some(parsed),
-                    Err(e) => {
-                        self.error_message = Some(format!(
-                            "Error getting start response: {:?}: {}",
-                            ServerError::try_from(e.value.error_variant)
-                                .unwrap_or(ServerError::AnyOtherError),
-                            e.value.message
-                        ));
-                        None
-                    }
-                };
             }
-            self.data.rx = None;
-        }
-
-        // Handle dynamic status after we have started
-        if self.data.started && self.data.start_response.is_some() {
-            // let current_time = Instant::now();
-            // if current_time.duration_since(self.next_status_update) > STATUS_POLL_DURATION {
-            // self.next_status_update += STATUS_POLL_DURATION;
-            // self.serial_event_propagator
-            // .write_to_serial(Command::Status, StatusArguments {})
-            // .unwrap();
-            // }
-
-            // Parse status
-            if let Some(data) = &self.data.rx {
-                let parsed = SerialEventPropagator::parse_response::<StatusResponse>(data).unwrap();
-                let status = match parsed {
-                    Ok(parsed) => Some(parsed),
-                    Err(e) => {
-                        self.error_message = Some(format!(
-                            "Error getting dynamic status: {:?}: {}",
-                            ServerError::try_from(e.value.error_variant)
-                                .unwrap_or(ServerError::AnyOtherError),
-                            e.value.message
-                        ));
-                        None
-                    }
-                };
-                if let Some(status) = status {
-                    self.data.status = Some(status);
+            ReceivingPing => {
+                if self.run_data.ping_status_response.is_some() {
+                    self.gui_data.current_job = self.gui_data.current_job.next();
                 }
+                Ok(())
+            }
+            RequestingStaticStatus => {
+                self.gui_data.current_job = self.gui_data.current_job.next();
+                self.serial_event_propagator
+                    .write_to_serial(Command::StaticStatus, StaticStatusArguments {})
+            }
+            ReceivingStaticStatus => {
+                if self.run_data.static_status_response.is_some() {
+                    self.gui_data.current_job = self.gui_data.current_job.next();
+                }
+                Ok(())
+            }
+            RequestingStart => {
+                self.gui_data.current_job = self.gui_data.current_job.next();
+                self.serial_event_propagator.write_to_serial(
+                    Command::Start,
+                    StartArguments {
+                        distance: self.gui_data.distance,
+                        reverse_brake: self.gui_data.reverse_braking,
+                    },
+                )
+            }
+            ReceivingStatus => Ok(()),
+            RequestingStop => {
+                self.gui_data.current_job = self.gui_data.current_job.next();
+                self.serial_event_propagator
+                    .write_to_serial(Command::Stop, StopArguments {})
+            }
+            Finished => Ok(()),
+            #[allow(unreachable_patterns)]
+            unhandled => {
+                self.gui_data.current_job = self.gui_data.current_job.next();
+                Err(ClientError::Unknown(format!(
+                    "Not sure how to handle current job of '{}', skipping it!",
+                    unhandled.to_string()
+                )))
             }
         }
+        .unwrap_or_else(|e| self.errors.push(e.into()));
+    }
 
-        // Display status
-        if let Some(event) = &self.data.static_status {
-            let status = &event.value;
-            ui.label(format!("Number of magnets: {}", status.number_of_magnets));
-            ui.label(format!(
-                "Wheel diameter: {} inches / {} centimeters",
-                status.wheel_diameter / 2.54,
-                status.wheel_diameter
-            ));
-        } else {
-            ui.label("No static status");
+    fn start(&mut self) {
+        if self.run_data.running {
+            return;
         }
-        if let Some(event) = &self.data.status {
-            let status = &event.value;
-            ui.label(format!(
-                "Running: {}",
-                match status.running {
-                    true => "YES",
-                    false => "NO",
+
+        // Ensure we have all the user input
+        #[allow(clippy::neg_cmp_op_on_partial_ord)]
+        if !(self.gui_data.distance > 0.0) {
+            return self.errors.push(ErrorData::new(ClientError::Run(
+                "Distance is not over 0 centimeters".to_owned(),
+            )));
+        }
+
+        self.run_data.running = true;
+        self.gui_data.current_job = ClientStatus::SendingPing;
+    }
+
+    fn stop(&mut self) {
+        self.run_data.running = false;
+        self.gui_data.current_job = ClientStatus::RequestingStop;
+    }
+
+    fn reset(&mut self) {
+        self.run_data.running = false;
+        self.run_data.other_responses.clear();
+        self.run_data.ping_status_response = None;
+        self.run_data.static_status_response = None;
+        self.run_data.status_responses.clear();
+    }
+
+    fn show_status_table(&self, ui: &mut Ui) {
+        let status_table = TableBuilder::new(ui)
+            .striped(true)
+            .resizable(false)
+            .cell_layout(Layout::left_to_right(Align::Center))
+            .column(Column::auto()) // Runtime
+            .column(Column::auto()) // Distance
+            .column(Column::auto()) // Velocity
+            .column(Column::auto()) // Magnet odometer hits
+            .min_scrolled_height(0.0);
+
+        status_table
+            .header(20.0, |mut header| {
+                header.col(|ui| {
+                    ui.strong("Runtime");
+                });
+                header.col(|ui| {
+                    ui.strong("Distance (cm)");
+                });
+                header.col(|ui| {
+                    ui.strong("Velocity (cm/s)");
+                });
+                header.col(|ui| {
+                    ui.strong("Magnet hits");
+                });
+            })
+            .body(|mut body| {
+                for status in self.run_data.status_responses.iter().rev() {
+                    body.row(18.0, |mut row| {
+                        row.col(|ui| {
+                            ui.label(format!("{}", status.value.runtime));
+                        });
+                        row.col(|ui| {
+                            ui.label(format!("{}", status.value.distance.distance));
+                        });
+                        row.col(|ui| {
+                            ui.label(format!("{}", status.value.distance.velocity));
+                        });
+                        row.col(|ui| {
+                            ui.label(format!("{}", status.value.distance.magnet_hit_counter));
+                        });
+                    });
                 }
-            ));
-            ui.label(format!("Server uptime: {}", status.uptime));
-            ui.label(format!("Runtime: {}", status.runtime));
-            ui.label(format!(
-                "Distance traveled in centimeters: {}",
-                status.distance.distance
-            ));
-            ui.label(format!(
-                "Velocity in centimeters/second: {}",
-                status.distance.velocity
-            ));
-            ui.label(format!(
-                "Magnet odometer hits: {}",
-                status.distance.magnet_hit_counter
-            ));
-        } else {
-            ui.label("No dynamic status");
-        }
-
-        NextPageButton::Custom("Stop")
+            });
     }
 }
 impl App for ClientGUI {
     fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
-        // Read from serial
-        self.data.rx = match self.serial_event_propagator.read_from_serial() {
-            Some(read) => Some(read.unwrap()),
-            None => None,
-        };
+        self.logic();
 
-        CentralPanel::default().show(&ctx, |ui| {
-            ui.heading("CHARGE Dynamics' Cool Chemistry Car Controller (C4)");
-            if let Some(e) = &self.error_message {
-                ui.heading(e);
-            }
-            ui.separator();
+        // Show error messages
+        if !self.errors.is_empty() {
+            self.show_error_messages(ctx);
+        }
 
-            use Pages::*;
-            let next_page_button = match self.selected_option {
-                Stopped => self.stopped_page(ui),
-                DistanceInput => self.distance_input_page(ui),
-                Status => self.status_page(ui),
-                _ => NextPageButton::NoNextPage,
-            };
-
-            if !matches!(next_page_button, NextPageButton::NoNextPage) {
-                let next_page_option = Pages::next(&self.selected_option).unwrap_or(Pages::End);
-                let next_button = ui.add_sized(
-                    [120., 40.],
-                    Button::new(match next_page_button {
-                        NextPageButton::Custom(text) => text,
-                        NextPageButton::Regular => "Next",
-                        _ => unreachable!(),
-                    }),
-                );
-                if next_button.clicked() {
-                    if !Pages::at_boundary(&next_page_option) {
-                        self.selected_option = next_page_option;
-                    } else {
-                        self.selected_option = Pages::next(&Pages::Start).unwrap();
-                        // Reset everything
-                        self.data.sent_static_status = false;
-                        self.data.sent_stop_request = false;
-                        self.data.started = false;
-                        self.data.distance = None;
-                        self.data.start_response = None;
-                        self.data.static_status = None;
-                        self.data.status = None;
-                        self.data.rx = None;
-                        self.status = None;
+        // Show expanded status table
+        if self.gui_data.expanded_status_table {
+            Window::new("Status table")
+                .resizable(false)
+                .show(ctx, |ui| {
+                    let retract_button_size = [60., 20.];
+                    if ui
+                        .add_sized(retract_button_size, Button::new("Retract"))
+                        .clicked()
+                    {
+                        self.gui_data.expanded_status_table = false;
                     }
+                    self.show_status_table(ui);
+                });
+        }
+
+        ctx.set_visuals(Visuals::light());
+        TopBottomPanel::top("banner")
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.horizontal_centered(|ui| {
+                    ui.heading("CHARGE Dynamics' EC1B-Horme Route Planner");
+                });
+            });
+        ctx.set_visuals(Visuals::dark());
+        SidePanel::left("route-planner")
+            .resizable(false)
+            .exact_width(150.0)
+            .show(ctx, |ui| {
+                ui.heading("Plan your route");
+
+                /* Distance input */
+
+                ui.separator();
+                ui.label("Distance in centimeters");
+                ui.add(Slider::new(
+                    &mut self.gui_data.distance,
+                    0.0..=MAX_DISTANCE_RANGE_CENTIMETERS,
+                ));
+                // Increment buttons
+                let increment_button_size = [70., 50.];
+                // This is a slightly strange way of layout out items *vertically*
+                // by using two horizontals... but whatever!
+                ui.horizontal(|ui| {
+                    if ui
+                        .add_sized(increment_button_size, Button::new("-10"))
+                        .clicked()
+                    {
+                        if self.gui_data.distance < 10.0 {
+                            self.gui_data.distance = 0.0;
+                        } else {
+                            self.gui_data.distance -= 10.0;
+                        }
+                    }
+                    if ui
+                        .add_sized(increment_button_size, Button::new("+10"))
+                        .clicked()
+                    {
+                        self.gui_data.distance += 10.0;
+                        if self.gui_data.distance > MAX_DISTANCE_RANGE_CENTIMETERS {
+                            self.gui_data.distance = MAX_DISTANCE_RANGE_CENTIMETERS;
+                        }
+                    }
+                });
+                ui.horizontal(|ui| {
+                    if ui
+                        .add_sized(increment_button_size, Button::new("-100"))
+                        .clicked()
+                    {
+                        if self.gui_data.distance < 100.0 {
+                            self.gui_data.distance = 0.0;
+                        } else {
+                            self.gui_data.distance -= 100.0;
+                        }
+                    }
+                    if ui
+                        .add_sized(increment_button_size, Button::new("+100"))
+                        .clicked()
+                    {
+                        self.gui_data.distance += 100.0;
+                        if self.gui_data.distance > MAX_DISTANCE_RANGE_CENTIMETERS {
+                            self.gui_data.distance = MAX_DISTANCE_RANGE_CENTIMETERS;
+                        }
+                    }
+                });
+
+                /* Reverse motor braking */
+
+                ui.add(Checkbox::new(
+                    &mut self.gui_data.reverse_braking,
+                    "Reverse motor braking",
+                ));
+
+                /* Large control button */
+
+                use LargeButton::*;
+                let large_button_size = [150.0, 80.0];
+                let large_button = match self.run_data.running {
+                    false => match self.run_data.ping_status_response.is_none() {
+                        false => Reset,
+                        true => Start,
+                    },
+                    true => Stop,
+                };
+                if ui
+                    .add_sized(large_button_size, Button::new(large_button.to_string()))
+                    .clicked()
+                {
+                    match large_button {
+                        Start => self.start(),
+                        Reset => self.reset(),
+                        Stop => self.stop(),
+                    }
+                };
+            });
+        SidePanel::right("status")
+            .exact_width(WIDTH - 150.0)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.heading("Information");
+
+                /* Current job */
+
+                ui.label(format!(
+                    "Current job: {}",
+                    self.gui_data.current_job.to_string()
+                ));
+
+                /* Ping */
+
+                ui.separator();
+                if let Some((ping_response, got_time)) = &self.run_data.ping_status_response {
+                    ui.label(format!(
+                        "Round-trip latency: {}ms",
+                        (got_time - ping_response.value.sent_time) * 1000.0
+                    ));
+                } else {
+                    ui.label("No ping information available");
                 }
-            }
-        });
+
+                /* Static status */
+
+                ui.separator();
+                if let Some(static_status) = &self.run_data.static_status_response {
+                    ui.label(format!(
+                        "Number of magnets: {}",
+                        static_status.value.number_of_magnets,
+                    ));
+                    ui.label(format!(
+                        "Wheel diameter {:.3}in / {:.3}cm",
+                        static_status.value.wheel_diameter / 2.54,
+                        static_status.value.wheel_diameter,
+                    ));
+                    ui.label(format!(
+                        "Wheel circumference: {:.3}in / {:.3}cm",
+                        (static_status.value.wheel_diameter * PI) / 2.54,
+                        static_status.value.wheel_diameter * PI,
+                    ));
+                } else {
+                    ui.label("No static status available");
+                    ui.label(""); // filler space
+                    ui.label(""); // filler space
+                }
+
+                /* Dynamic status */
+                if let Some(latest_and_greatest_status) = self.run_data.status_responses.last() {
+                    ui.label(format!(
+                        "Running: {}",
+                        match latest_and_greatest_status.value.running {
+                            true => "YES",
+                            false => "NO",
+                        }
+                    ));
+                    ui.label(format!(
+                        "Uptime: {}",
+                        latest_and_greatest_status.value.uptime
+                    ));
+                    ui.label(format!(
+                        "Runtime: {}",
+                        latest_and_greatest_status.value.runtime
+                    ));
+                    ui.label(format!(
+                        "Last received: {:.3}seconds ago",
+                        (Local::now().timestamp_millis() as f64)
+                            - latest_and_greatest_status.metadata.time
+                    ));
+                } else {
+                    ui.label("No status available");
+                    ui.label(""); // filler
+                    ui.label(""); // filler
+                    ui.label(""); // filler
+                }
+
+                ui.separator();
+                let expand_button_size = [60., 20.];
+                if ui
+                    .add_sized(expand_button_size, Button::new("Expand"))
+                    .clicked()
+                {
+                    self.gui_data.expanded_status_table = true;
+                }
+
+                if self.gui_data.expanded_status_table {
+                    ui.label("Table rendered elsewhere");
+                    // The table is rendered outside of this current UI in
+                    // the right panel for it to freely move around
+                } else {
+                    self.show_status_table(ui);
+                }
+            });
 
         ctx.request_repaint();
     }
@@ -400,16 +578,14 @@ fn main() -> Result<(), ()> {
     // Connect to the server serial port
     let serial_port = args()
         .nth(1_usize)
-        .expect("Please enter the serial port device (e.g. `cargo run -- /dev/ttyACM0`");
-    let serial = new_serialport(serial_port.clone(), BAUD_RATE)
+        .expect("Please enter the serial port device (e.g. `cargo run /dev/pts/3`");
+    let mut serial = new_serialport(serial_port.clone(), BAUD_RATE)
         .timeout(Duration::from_millis(500_u64))
         .open()
-        .expect(
-            format!(
-            "Failed to connect to the serial port. Please ensure it is connected on {serial_port}"
-        )
-            .as_str(),
-        );
+        .unwrap_or_else(|_| panic!("Failed to connect to the serial port. Please ensure it is connected on {serial_port}"));
+    serial
+        .set_timeout(Duration::from_secs_f64(SERIAL_DELAY_TIME))
+        .map_err(|e| println!("{e}"))?;
 
     // Create the serial event propagator
     let serial_event_propagator = SerialEventPropagator::new(serial);
@@ -420,12 +596,16 @@ fn main() -> Result<(), ()> {
     // Make the window
     let options = NativeOptions {
         resizable: false,
-        initial_window_size: Some(vec2(480_f32, 320_f32)),
+        initial_window_size: Some(vec2(WIDTH, HEIGHT)),
         always_on_top: true,
         ..Default::default()
     };
-    run_native("Chemistry Car GUI", options, Box::new(|_cc| Box::new(app)))
-        .map_err(|e| log_error(e))?;
+    run_native(
+        "CHARGE Dynamics' EC1B-Horme Route Planner",
+        options,
+        Box::new(|_cc| Box::new(app)),
+    )
+    .map_err(|e| println!("{e}"))?;
 
     Ok(())
 }

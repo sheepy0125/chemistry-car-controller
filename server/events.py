@@ -371,7 +371,7 @@ class SerialEventPropagator:
                     event.value = error
                 else:
                     event = SerialEvent(
-                        command=Command.Unknown,
+                        command=Command.Error,
                         transit_type=TransitType.Response,  # Doesn't matter lol
                         transit_mode=TransitMode.ClientToServerRequest,  # Will be flopped
                         value=error,

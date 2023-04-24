@@ -191,7 +191,7 @@ class Command(Enum):
     Stop = 2
     StaticStatus = 3
     Status = 4
-    Unknown = 99
+    Error = 99
 
     @classmethod
     def lookup_by_name(cls, name: str) -> int | None:
@@ -209,8 +209,8 @@ class Command(Enum):
                 return cls.StaticStatus
             case "STATUS":
                 return cls.Status
-            case "UNKNOWN":
-                return cls.Unknown
+            case "ERROR" | "UNKNOWN":
+                return cls.Error
             case _:
                 return None
 
@@ -279,27 +279,35 @@ class ErrorResponse(SerializableStruct):
 
 
 class PingArguments(SerializableStruct):
-    ...
+    def __init__(self, time: float):
+        self.time = time
+
+    @property
+    def __dict__(self) -> dict:
+        return {"time": self.time}
 
 
 class PingResponse(SerializableStruct):
-    ...
+    def __init__(self, sent_time: float):
+        self.sent_time = sent_time
+
+    @property
+    def __dict__(self) -> dict:
+        return {"sent_time": self.sent_time}
 
 
 # Start
 
 
 class StartArguments(SerializableStruct):
-    def __init__(self, distance: float, forward: bool, reverse_brake: bool):
+    def __init__(self, distance: float, reverse_brake: bool):
         self.distance = unsigned_float(distance)
-        self.forward = bool(forward)
         self.reverse_brake = bool(reverse_brake)
 
     @property
     def __dict__(self) -> dict:
         return {
             "distance": self.distance,
-            "forward": self.forward,
             "reverse_brake": self.reverse_brake,
         }
 

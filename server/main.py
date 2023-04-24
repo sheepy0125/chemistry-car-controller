@@ -89,6 +89,8 @@ def magnet_event(event: GPIOEvent) -> None:
 
 
 def ping(event: SerialEvent) -> PingResponse:
+    ping_request: PingArguments = event.value
+
     metadata: MetaData = event.metadata
 
     time = unix_epoch()
@@ -96,7 +98,7 @@ def ping(event: SerialEvent) -> PingResponse:
     latency = unsigned_float(time - metadata.time)
     Logger.verbose(f"One-way latency is {round(latency * 100, 5)}ms")
 
-    return PingResponse(time)
+    return PingResponse(ping_request.time)
 
 
 def start(event: SerialEvent) -> StartResponse:
@@ -198,7 +200,6 @@ def start_thread(arguments: StartArguments):
                 Motor.stop()
                 break
 
-    # TODO: Reverse braking
     stop(stop_start_thread=False)
     send_status()
 
