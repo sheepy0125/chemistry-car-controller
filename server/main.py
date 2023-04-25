@@ -41,7 +41,7 @@ from shared import (
     NUMBER_OF_MAGNETS,
     STATUS_POLL_DURATION_SECONDS,
     WHEEL_DIAMETER_CENTIMETERS,
-    WHEEL_DIAMETER_INCHES,
+    REVERSE_MOTOR_DIRECTION_MIN_TIME_SECONDS,
     WHEEL_CIRCUMFERENCE_CENTIMETERS,
 )
 from motor_controller import Motor
@@ -128,10 +128,9 @@ def start(event: SerialEvent) -> StartResponse:
 
 
 def start_thread(arguments: StartArguments):
+    # FIXME: use this
     should_reverse_brake = arguments.reverse_brake
-
-    # Start the motors
-    Motor.forward()
+    reverse_brake_started_time = None
 
     next_status_poll = unix_epoch() + STATUS_POLL_DURATION_SECONDS
 
@@ -158,6 +157,8 @@ def start_thread(arguments: StartArguments):
             enum_variant=Error.FailedToStartCouldNotAcquireDistanceLock,
             inner=RuntimeError("The distance lock simply was left acquired"),
         )
+
+    Motor.forward()
 
     while MutexStartData.started_flag.is_set():
         # E-STOP
@@ -190,6 +191,7 @@ def start_thread(arguments: StartArguments):
                 >= arguments.distance
             ):
                 Motor.backward()
+                reverse_brake_started_time = unix_epoch()
 
         # Reverse braking
         elif Motor.current_direction == Direction.Backward:
@@ -198,6 +200,13 @@ def start_thread(arguments: StartArguments):
                 MutexStartData.distance.distance - BACKWARD_LEEWAY_DISTANCE_CENTIMETERS
                 <= arguments.distance
             ):
+                # We may be checking too quickly and thus see the car is at the
+                # distance window when, in fact, it just hasn't had time to roll
+                if (
+                    unix_epoch() - reverse_brake_started_time
+                    < REVERSE_MOTOR_DIRECTION_MIN_TIME_SECONDS
+                ):
+                    continue
                 Motor.stop()
                 break
 

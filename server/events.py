@@ -19,6 +19,7 @@ from bindings import (
     MetaData,
     COMMAND_SERIALIZABLE_LUT,
 )
+from server.motor_controller import Motor
 
 from utils import Logger
 from shared import (
@@ -353,6 +354,10 @@ class SerialEventPropagator:
                     Logger.fatal(f"Callback failed for {rx!r} for an uncaught reason!")
                     Logger.log_error(e)
                     error = ErrorResponse(Error.AnyOtherError, str(e))
+                finally:
+                    # The response could be an error blocking the motors from stopping
+                    # For safety, do it after *every* callback
+                    Motor.stop()
 
             # Parse response
             to_send = None
