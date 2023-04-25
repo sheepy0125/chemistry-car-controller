@@ -27,6 +27,8 @@ pub enum ClientError {
     Serial(String),
     #[error("An unknown error occurred: {0}")]
     Unknown(String),
+    #[error("Failed handling CSV file: {0}")]
+    CSV(String),
     #[error("{0}")]
     Server(String),
 }

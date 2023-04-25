@@ -1,4 +1,4 @@
-/*
+/*!
  * The Raspberry PI 3B GUI for car controller
  * Created by sheepy0125 | MIT license | 2023-02-16
  */
@@ -8,23 +8,27 @@
 use chrono::{DateTime, Local};
 use eframe::{epaint::vec2, run_native, App, NativeOptions};
 use egui::{
-    Align, Button, Checkbox, Context, Label, Layout, SidePanel, Slider, TopBottomPanel, Ui,
-    Visuals, Window,
+    Align, Button, Checkbox, Context, Label, Layout, SidePanel, Slider, TextEdit, TopBottomPanel,
+    Ui, Visuals, Window,
 };
 use egui_extras::{Column, TableBuilder};
+use egui_file::FileDialog;
 use serialport::new as new_serialport;
 use smart_default::SmartDefault;
 use std::{
-    env::args,
+    env::{args, current_dir},
     f64::consts::PI,
+    path::{Path, PathBuf},
     time::{Duration, Instant},
 };
-mod bindings;
+pub mod bindings;
 use bindings::*;
-mod events;
+pub mod events;
 use events::*;
-mod shared;
+pub mod shared;
 use shared::*;
+pub mod csv_table;
+use csv_table::*;
 
 /***** Client *****/
 
@@ -58,6 +62,10 @@ pub struct GUIData {
     #[default = false]
     pub expanded_status_table: bool,
     pub current_job: ClientStatus,
+    #[default = "status.csv"]
+    pub display_file_path: String,
+    pub file_path: Option<PathBuf>,
+    pub file_dialog: Option<FileDialog>,
 }
 
 /// Possible values for the large button
@@ -335,10 +343,10 @@ impl ClientGUIHandlers for ClientGUI {
                             ui.label(format!("{}", status.value.runtime));
                         });
                         row.col(|ui| {
-                            ui.label(format!("{}", status.value.distance.distance));
+                            ui.label(format!("{:.3}", status.value.distance.distance));
                         });
                         row.col(|ui| {
-                            ui.label(format!("{}", status.value.distance.velocity));
+                            ui.label(format!("{:.3}", status.value.distance.velocity));
                         });
                         row.col(|ui| {
                             ui.label(format!("{}", status.value.distance.magnet_hit_counter));
@@ -351,6 +359,17 @@ impl ClientGUIHandlers for ClientGUI {
 impl App for ClientGUI {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         self.logic();
+
+        // Handle file dialog if needed
+        if let Some(dialog) = &mut self.gui_data.file_dialog {
+            if dialog.show(ctx).selected() {
+                if let Some(file) = dialog.path() {
+                    self.gui_data.display_file_path =
+                        file.file_name().unwrap().to_string_lossy().to_string();
+                    self.gui_data.file_path = Some(file);
+                }
+            }
+        }
 
         // Show error messages
         if !self.errors.is_empty() {
@@ -390,76 +409,80 @@ impl App for ClientGUI {
 
                 /* Distance input */
 
-                let distance: f64 = self.gui_data.distance.clone();
-                ui.separator();
-                ui.label("Distance in centimeters");
-                ui.add(Slider::new(
-                    &mut self.gui_data.distance,
-                    0.0..=match distance > MAX_DISTANCE_RANGE_CENTIMETERS {
-                        true => distance,
-                        false => MAX_DISTANCE_RANGE_CENTIMETERS,
-                    },
-                ));
-                // Increment buttons
-                let increment_button_size = [70., 50.];
-                // This is a slightly strange way of layout out items *vertically*
-                // by using two horizontals... but whatever!
-                ui.horizontal(|ui| {
-                    if ui
-                        .add_sized(increment_button_size, Button::new("-10"))
-                        .clicked()
-                    {
-                        if self.gui_data.distance < 10.0 {
-                            self.gui_data.distance = 0.0;
-                        } else {
-                            self.gui_data.distance -= 10.0;
+                ui.push_id("distance input", |ui| {
+                    if self.run_data.running {
+                        ui.set_enabled(false);
+                    }
+
+                    let distance: f64 = self.gui_data.distance;
+                    ui.separator();
+                    ui.label("Distance in centimeters");
+                    ui.add(Slider::new(
+                        &mut self.gui_data.distance,
+                        0.0..=match distance > MAX_DISTANCE_RANGE_CENTIMETERS {
+                            true => distance,
+                            false => MAX_DISTANCE_RANGE_CENTIMETERS,
+                        },
+                    ));
+                    // Increment buttons
+                    let increment_button_size = [70., 60.];
+                    // This is a slightly strange way of layout out items *vertically*
+                    // by using two horizontals... but whatever!
+                    ui.horizontal(|ui| {
+                        if ui
+                            .add_sized(increment_button_size, Button::new("-10"))
+                            .clicked()
+                        {
+                            if self.gui_data.distance < 10.0 {
+                                self.gui_data.distance = 0.0;
+                            } else {
+                                self.gui_data.distance -= 10.0;
+                            }
                         }
-                    }
-                    if ui
-                        .add_sized(increment_button_size, Button::new("+10"))
-                        .clicked()
-                    {
-                        self.gui_data.distance += 10.0;
-                        // if self.gui_data.distance > MAX_DISTANCE_RANGE_CENTIMETERS {
-                        // self.gui_data.distance = MAX_DISTANCE_RANGE_CENTIMETERS;
-                        // }
-                    }
-                });
-                ui.horizontal(|ui| {
-                    if ui
-                        .add_sized(increment_button_size, Button::new("-100"))
-                        .clicked()
-                    {
-                        if self.gui_data.distance < 100.0 {
-                            self.gui_data.distance = 0.0;
-                        } else {
-                            self.gui_data.distance -= 100.0;
+                        if ui
+                            .add_sized(increment_button_size, Button::new("+10"))
+                            .clicked()
+                        {
+                            self.gui_data.distance += 10.0;
                         }
-                    }
-                    if ui
-                        .add_sized(increment_button_size, Button::new("+100"))
-                        .clicked()
-                    {
-                        self.gui_data.distance += 100.0;
-                        // if self.gui_data.distance > MAX_DISTANCE_RANGE_CENTIMETERS {
-                        // self.gui_data.distance = MAX_DISTANCE_RANGE_CENTIMETERS;
-                        // }
-                    }
+                    });
+                    ui.horizontal(|ui| {
+                        if ui
+                            .add_sized(increment_button_size, Button::new("-100"))
+                            .clicked()
+                        {
+                            if self.gui_data.distance < 100.0 {
+                                self.gui_data.distance = 0.0;
+                            } else {
+                                self.gui_data.distance -= 100.0;
+                            }
+                        }
+                        if ui
+                            .add_sized(increment_button_size, Button::new("+100"))
+                            .clicked()
+                        {
+                            self.gui_data.distance += 100.0;
+                        }
+                    });
                 });
 
                 /* Reverse motor braking */
 
-                ui.add(Checkbox::new(
-                    &mut self.gui_data.reverse_braking,
-                    "Reverse motor braking",
-                ));
+                // FIXME: The server doesn't do anything with this information; it's literally useless
+                // ui.add(Checkbox::new(
+                //     &mut self.gui_data.reverse_braking,
+                //     "Reverse motor braking",
+                // ));
 
                 /* Large control button */
 
+                ui.separator();
                 use LargeButton::*;
                 let large_button_size = [150.0, 80.0];
                 let large_button = match self.run_data.running {
-                    false => match self.run_data.ping_status_response.is_none() {
+                    false => match self.run_data.ping_status_response.is_none()
+                        && self.run_data.status_responses.is_empty()
+                    {
                         false => Reset,
                         true => Start,
                     },
@@ -521,7 +544,7 @@ impl App for ClientGUI {
                                     ui.strong("Magnets");
                                 });
                                 header.col(|ui| {
-                                    ui.strong("Diameter");
+                                    ui.strong("Wheel Diameter");
                                 });
                                 header.col(|ui| {
                                     ui.strong("Circumference");
@@ -557,6 +580,7 @@ impl App for ClientGUI {
                 }
 
                 /* Dynamic status */
+
                 if let Some(latest_and_greatest_status) = self.run_data.status_responses.last() {
                     ui.push_id("dynamic status latest and greatest status table", |ui| {
                         let latest_and_greatest_status_table = TableBuilder::new(ui)
@@ -619,13 +643,80 @@ impl App for ClientGUI {
                 }
 
                 ui.separator();
-                let expand_button_size = [60., 20.];
-                if ui
-                    .add_sized(expand_button_size, Button::new("Expand"))
-                    .clicked()
-                {
-                    self.gui_data.expanded_status_table = true;
-                }
+                ui.horizontal(|ui| {
+                    /* Expand */
+                    let expand_button_size = [60., 20.];
+                    if ui
+                        .add_sized(expand_button_size, Button::new("Expand"))
+                        .clicked()
+                    {
+                        self.gui_data.expanded_status_table = true;
+                    }
+                    /* Load / save */
+                    ui.push_id("load and save", |ui| {
+                        if self.run_data.running {
+                            ui.set_enabled(false);
+                        }
+
+                        let text_input_size = [85., 20.];
+                        ui.push_id("text input disabled", |ui| {
+                            ui.set_enabled(false);
+                            ui.add_sized(
+                                text_input_size,
+                                TextEdit::singleline(&mut self.gui_data.display_file_path),
+                            )
+                        });
+                        let csv_handling_button_size = [60., 20.];
+                        if ui
+                            .add_sized(csv_handling_button_size, Button::new("Browse"))
+                            .clicked()
+                        {
+                            // `FileDialog::new` is private for some reason...
+                            let mut dialog = match self.run_data.status_responses.is_empty() {
+                                true => FileDialog::open_file(None),
+                                false => FileDialog::save_file(None),
+                            }
+                            .default_size(vec2(WIDTH, HEIGHT - 120.));
+                            dialog.open();
+                            self.gui_data.file_dialog = Some(dialog);
+                        }
+                        if self.run_data.status_responses.is_empty() {
+                            if ui
+                                .add_sized(csv_handling_button_size, Button::new("Load status"))
+                                .clicked()
+                            {
+                                match CSVDynamicStatus::read(
+                                    &(self.gui_data.file_path.clone().unwrap_or_else(|| {
+                                        PathBuf::from(&self.gui_data.display_file_path)
+                                    })),
+                                ) {
+                                    Ok(mut new_table) => {
+                                        self.run_data.status_responses.clear();
+                                        self.run_data.status_responses.append(&mut new_table);
+                                    }
+                                    Err(e) => {
+                                        self.errors
+                                            .push(ErrorData::new(ClientError::CSV(e.to_string())));
+                                    }
+                                };
+                            }
+                        } else if ui
+                            .add_sized(csv_handling_button_size, Button::new("Save status"))
+                            .clicked()
+                        {
+                            CSVDynamicStatus::write(
+                                &(self.gui_data.file_path.clone().unwrap_or_else(|| {
+                                    PathBuf::from(&self.gui_data.display_file_path)
+                                })),
+                                &self.run_data.status_responses,
+                            )
+                            .unwrap_or_else(|e| {
+                                self.errors
+                                    .push(ErrorData::new(ClientError::CSV(e.to_string())));
+                            });
+                        }
+                    });
+                });
 
                 if self.gui_data.expanded_status_table {
                     ui.label("Table rendered elsewhere");

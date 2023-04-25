@@ -122,7 +122,6 @@ impl SerialEventPropagator {
         let stringified_metadata =
             serde_to_string(&metadata).map_err(|e| ClientError::Parse(e.to_string()))?;
 
-        let to_send = format!("{prefix}{command}${stringified_data}${stringified_metadata}");
         writeln!(
             self.serial,
             "{prefix}{command}${stringified_data}${stringified_metadata}"

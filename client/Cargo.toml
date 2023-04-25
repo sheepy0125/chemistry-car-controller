@@ -7,9 +7,11 @@ edition = "2021"
 
 [dependencies]
 chrono = "0.4.24"
+csv = "1.2.1"
 eframe = "0.21.3"
 egui = "0.21.0"
 egui_extras = "0.21.0"
+egui_file = "0.8.1"
 either = "1.8.1"
 lazy_static = "1.4.0"
 num-derive = "0.3.3"
