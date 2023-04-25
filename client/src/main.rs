@@ -8,17 +8,17 @@
 use chrono::{DateTime, Local};
 use eframe::{epaint::vec2, run_native, App, NativeOptions};
 use egui::{
-    Align, Button, Checkbox, Context, Label, Layout, SidePanel, Slider, TextEdit, TopBottomPanel,
-    Ui, Visuals, Window,
+    Align, Button, Context, Label, Layout, SidePanel, Slider, TextEdit, TopBottomPanel, Ui,
+    Visuals, Window,
 };
 use egui_extras::{Column, TableBuilder};
 use egui_file::FileDialog;
 use serialport::new as new_serialport;
 use smart_default::SmartDefault;
 use std::{
-    env::{args, current_dir},
+    env::args,
     f64::consts::PI,
-    path::{Path, PathBuf},
+    path::PathBuf,
     time::{Duration, Instant},
 };
 pub mod bindings;

@@ -133,7 +133,6 @@ class SerialEventPropagator:
             # It will be in the *self.serial buffer* next time
             # Carriage returns are counted as newlines, as `scip` uses them upon enter
             if character == "\n" or character == "\r":
-                hit_newline = True
                 break
             string_buffer += character
         else:  # no break
@@ -282,7 +281,7 @@ class SerialEventPropagator:
         # Encapsulate everything into a string
         return f"{prefix}{command}${response}${metadata}\r\n"
 
-    async def main_loop(self):
+    async def main_loop(self):  # NOSONAR
         while True:
             error = None
 
@@ -337,7 +336,7 @@ class SerialEventPropagator:
                         TransitType.Response
                     ]
                     if not isinstance(response, expected_struct_type):
-                        ServerException(
+                        raise ServerException(
                             enum_variant=Error.MalformedRequestTypeError,
                             inner=TypeError(
                                 f"The response responded with {response.__class__!r} instead of "

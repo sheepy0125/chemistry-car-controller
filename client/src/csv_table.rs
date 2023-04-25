@@ -3,7 +3,7 @@
  * Created by sheepy0125 | MIT license | 2023-04-25
  */
 
-use std::{error::Error, fs::File, path::PathBuf};
+use std::{error::Error, fs::File, path::Path};
 
 /***** Setup *****/
 // Imports
@@ -15,13 +15,13 @@ use csv::{Reader, Writer};
 
 /***** CSV interface *****/
 pub trait CSVInterface {
-    fn write(file_path: &PathBuf, data: &[Event<StatusResponse>]) -> Result<(), Box<dyn Error>>;
-    fn read(file_path: &PathBuf) -> Result<Vec<Event<StatusResponse>>, Box<dyn Error>>;
+    fn write(file_path: &Path, data: &[Event<StatusResponse>]) -> Result<(), Box<dyn Error>>;
+    fn read(file_path: &Path) -> Result<Vec<Event<StatusResponse>>, Box<dyn Error>>;
 }
 
 pub struct CSVDynamicStatus;
 impl CSVInterface for CSVDynamicStatus {
-    fn read(file_path: &PathBuf) -> Result<Vec<Event<StatusResponse>>, Box<dyn Error>> {
+    fn read(file_path: &Path) -> Result<Vec<Event<StatusResponse>>, Box<dyn Error>> {
         let file = File::open(file_path)?;
         let mut csv_reader = Reader::from_reader(file);
         let mut ret_events = vec![];
@@ -57,7 +57,7 @@ impl CSVInterface for CSVDynamicStatus {
         Ok(ret_events)
     }
 
-    fn write(file_path: &PathBuf, data: &[Event<StatusResponse>]) -> Result<(), Box<dyn Error>> {
+    fn write(file_path: &Path, data: &[Event<StatusResponse>]) -> Result<(), Box<dyn Error>> {
         let file = File::create(file_path)?;
         let mut csv_writer = Writer::from_writer(file);
 
