@@ -109,7 +109,7 @@ class Error(Enum):
     AnyOtherError = 99
 
 
-class Direction(Enum):
+class Direction:
     """This enum is non serializable"""
 
     Backward = -1

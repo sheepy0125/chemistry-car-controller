@@ -19,7 +19,7 @@ from bindings import (
     MetaData,
     COMMAND_SERIALIZABLE_LUT,
 )
-from server.motor_controller import Motor
+from motor_controller import Motor
 
 from utils import Logger
 from shared import (

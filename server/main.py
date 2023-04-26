@@ -159,6 +159,7 @@ def start_thread(arguments: StartArguments):
         )
 
     Motor.forward()
+    direction = Direction.Forward
 
     while MutexStartData.started_flag.is_set():
         # E-STOP
@@ -174,27 +175,30 @@ def start_thread(arguments: StartArguments):
         # Keep track of distance
         if MutexStartData.magnet_hit_flag.is_set():
             MutexStartData.magnet_hit_flag.clear()
-
-            MutexStartData.distance.magnet_hit_counter += Motor.current_direction
+            Logger.verbose(
+                f"Adding {direction=} to {MutexStartData.distance.magnet_hit_counter=}"
+            )
+            MutexStartData.distance.magnet_hit_counter += direction
             MutexStartData.distance.distance += (
                 WHEEL_CIRCUMFERENCE_CENTIMETERS / NUMBER_OF_MAGNETS
-            ) * Motor.current_direction
+            ) * direction
             MutexStartData.distance.velocity = MutexStartData.distance.distance / (
                 unix_epoch() - MutexStartData.started_time
             )
 
         # Going forward
-        if Motor.current_direction == Direction.Forward:
+        if direction == Direction.Forward:
             # Exceeded distance
             if (
                 MutexStartData.distance.distance + FORWARD_LEEWAY_DISTANCE_CENTIMETERS
                 >= arguments.distance
             ):
                 Motor.backward()
+                direction = Direction.Backward
                 reverse_brake_started_time = unix_epoch()
 
         # Reverse braking
-        elif Motor.current_direction == Direction.Backward:
+        elif direction == Direction.Backward:
             # Done reverse braking
             if (
                 MutexStartData.distance.distance - BACKWARD_LEEWAY_DISTANCE_CENTIMETERS
@@ -208,6 +212,7 @@ def start_thread(arguments: StartArguments):
                 ):
                     continue
                 Motor.stop()
+                direction = Direction.Stopped
                 break
 
     stop(stop_start_thread=False)

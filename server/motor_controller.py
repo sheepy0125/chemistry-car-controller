@@ -70,7 +70,7 @@ class MotorControllerRelayPins:
 
 
 class Motor:
-    current_direction = Direction.Stopped
+    # current_direction = Direction.Stopped
 
     @staticmethod
     def _transmute_relays(
@@ -123,7 +123,7 @@ class Motor:
         Forward  NEG -> HIGH
         """
 
-        cls.current_direction = Direction.Forward
+        Motor.current_direction = Direction.Forward
 
         cls._transmute_relays(
             first=MotorControllerRelayPins.Backward,
@@ -143,7 +143,7 @@ class Motor:
         Backward NEG -> HIGH
         """
 
-        cls.current_direction = Direction.Backward
+        Motor.current_direction = Direction.Backward
 
         cls._transmute_relays(
             first=MotorControllerRelayPins.Forward,
@@ -162,7 +162,7 @@ class Motor:
         Backward NEG -> LOW
         """
 
-        cls.current_direction = Direction.Stopped
+        Motor.current_direction = Direction.Stopped
 
         cls._transmute_relays(
             first=MotorControllerRelayPins.Forward,
