@@ -95,7 +95,9 @@ def ping(event: SerialEvent) -> PingResponse:
 
     time = unix_epoch()
 
-    latency = unsigned_float(time - metadata.time)
+    # latency = unsigned_float(time - metadata.time)
+    latency = float(time - metadata.time)
+
     Logger.verbose(f"One-way latency is {round(latency * 100, 5)}ms")
 
     return PingResponse(ping_request.time)
