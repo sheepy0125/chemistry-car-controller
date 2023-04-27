@@ -117,6 +117,50 @@ class Direction:
     Forward = 1
 
 
+class RunStage(Enum):
+    """All the run stages that exist for the motor control after
+    the car has started
+    """
+
+    # Not started or finalized
+    Stopped = 0
+    Finalized = 4
+    # Going forward until reaching the distance
+    VehementForward = 1
+    # Stalling to see how far was overshot
+    StallOvershoot = 2
+    # Cautiously back up
+    CautiousBackward = 3
+
+    @classmethod
+    def lookup_by_prefix(cls, prefix: str) -> int | None:
+        match prefix:
+            case "STOPPED":
+                return cls.Stopped
+            case "FORWARD":
+                return cls.VehementForward
+            case "STALL":
+                return cls.StallOvershoot
+            case "BACKWARD":
+                return cls.CautiousBackUp
+            case _:
+                return None
+
+    @classmethod
+    def lookup_by_variant(cls, variant: int) -> str | None:
+        match variant:
+            case cls.Stopped:
+                return "STOPPED"
+            case cls.VehementForward:
+                return "FORWARD"
+            case cls.StallOvershoot:
+                return "STALL"
+            case cls.CautiousBackUp:
+                return "BACKWARD"
+            case _:
+                return None
+
+
 class GPIOPin(Enum):
     """This enum is non serializable"""
 
@@ -381,11 +425,13 @@ class StatusResponse(SerializableStruct):
         uptime: int,
         runtime: int,
         distance: DistanceInformation,
+        run_stage: int,
     ):
         self.running = bool(running)
         self.uptime = unsigned_int(uptime)
         self.runtime = unsigned_int(runtime)
         self.distance = distance.__dict__
+        self.run_stage = run_stage
 
     @property
     def __dict__(self) -> dict:
@@ -394,6 +440,7 @@ class StatusResponse(SerializableStruct):
             "uptime": self.uptime,
             "runtime": self.runtime,
             "distance": self.distance,
+            "run_stage": self.run_stage,
         }
 
 

@@ -20,6 +20,7 @@ from bindings import (
     MetaData,
     PingArguments,
     PingResponse,
+    RunStage,
     StartArguments,
     StartResponse,
     StopArguments,
@@ -37,11 +38,12 @@ from bindings import (
 )
 from shared import (
     BACKWARD_LEEWAY_DISTANCE_CENTIMETERS,
+    CAUTIOUS_REVERSE_STALL_FOR_SECONDS,
     FORWARD_LEEWAY_DISTANCE_CENTIMETERS,
     NUMBER_OF_MAGNETS,
+    MAGNET_FREE_STALL_FOR_SECONDS,
     STATUS_POLL_DURATION_SECONDS,
     WHEEL_DIAMETER_CENTIMETERS,
-    REVERSE_MOTOR_DIRECTION_MIN_TIME_SECONDS,
     WHEEL_CIRCUMFERENCE_CENTIMETERS,
 )
 from motor_controller import Motor
@@ -68,8 +70,18 @@ class MutexStartData:
     started_flag: ThreadEvent = ThreadEvent()
     magnet_hit_flag: ThreadEvent = ThreadEvent()
     e_stop_flag: ThreadEvent = ThreadEvent()
-    distance_information_lock: ThreadLock = ThreadLock()
+    lock: ThreadLock = ThreadLock()
     distance: DistanceInformation | None = None
+    run_stage: RunStage = RunStage.Stopped
+
+
+class RunData:
+    """Run data stored for starting the car"""
+
+    magnet_time = 0.0
+    next_status_poll_time = 0.0
+    stop_cautious_reversing_time = 0.0
+    magnet_hits_cautiously_reversing = 0
 
 
 ### Event callbacks ###
@@ -130,11 +142,9 @@ def start(event: SerialEvent) -> StartResponse:
 
 
 def start_thread(arguments: StartArguments):
-    # FIXME: use this
     should_reverse_brake = arguments.reverse_brake
-    reverse_brake_started_time = None
 
-    next_status_poll = unix_epoch() + STATUS_POLL_DURATION_SECONDS
+    RunData.next_status_poll_time = unix_epoch() + STATUS_POLL_DURATION_SECONDS
 
     def send_status():
         current_time = unix_epoch()
@@ -148,29 +158,32 @@ def start_thread(arguments: StartArguments):
                     uptime=current_time - START_UPTIME,
                     runtime=current_time - MutexStartData.started_time,
                     distance=MutexStartData.distance,
+                    run_stage=MutexStartData.run_stage,
                 ),
                 metadata=MetaData(unix_epoch()),
             )
         )
         GlobalEventPropagators.serial.serial.write(bytes(to_send, "utf-8"))
 
-    if not MutexStartData.distance_information_lock.acquire(timeout=1.0):
+    if not MutexStartData.lock.acquire(timeout=1.0):
         raise ServerException(
             enum_variant=Error.FailedToStartCouldNotAcquireDistanceLock,
-            inner=RuntimeError("The distance lock simply was left acquired"),
+            inner=RuntimeError("The lock simply was left acquired"),
         )
 
-    Motor.forward()
-    direction = Direction.Forward
+    direction = Direction.Stopped
+    # Note: This is in :class:`MutexStartData` for the dynamic status callback to
+    # access it if desired
+    MutexStartData.run_stage = RunStage.VehementForward
 
     while MutexStartData.started_flag.is_set():
         # E-STOP
         if MutexStartData.e_stop_flag.is_set():
+            MutexStartData.run_stage = RunStage.Stopped
             break
 
         # Status
-        current_time = unix_epoch()
-        if current_time >= next_status_poll:
+        if unix_epoch() >= next_status_poll:
             next_status_poll += STATUS_POLL_DURATION_SECONDS
             send_status()
 
@@ -187,35 +200,57 @@ def start_thread(arguments: StartArguments):
             MutexStartData.distance.velocity = MutexStartData.distance.distance / (
                 unix_epoch() - MutexStartData.started_time
             )
+            RunData.magnet_hit = unix_epoch()
 
-        # Going forward
-        if direction == Direction.Forward:
-            # Exceeded distance
-            if (
-                MutexStartData.distance.distance + FORWARD_LEEWAY_DISTANCE_CENTIMETERS
-                >= arguments.distance
-            ):
-                Motor.backward()
-                direction = Direction.Backward
-                reverse_brake_started_time = unix_epoch()
-
-        # Reverse braking
-        elif direction == Direction.Backward:
-            # Done reverse braking
-            if (
-                MutexStartData.distance.distance - BACKWARD_LEEWAY_DISTANCE_CENTIMETERS
-                <= arguments.distance
-            ):
-                # We may be checking too quickly and thus see the car is at the
-                # distance window when, in fact, it just hasn't had time to roll
-                if (
-                    unix_epoch() - reverse_brake_started_time
-                    < REVERSE_MOTOR_DIRECTION_MIN_TIME_SECONDS
-                ):
-                    continue
-                Motor.stop()
-                direction = Direction.Stopped
+        match MutexStartData.run_stage:
+            case RunStage.Stopped | RunStage.Finalized:
                 break
+            case RunStage.VehementForward:
+                if direction != Direction.Forward:
+                    Motor.forward()
+                    direction = Direction.Forward
+
+                # Exceeded distance
+                if (
+                    MutexStartData.distance.distance
+                    >= arguments.distance - FORWARD_LEEWAY_DISTANCE_CENTIMETERS
+                ):
+                    MutexStartData.run_stage += 1
+            case RunStage.StallOvershoot:
+                if direction != Direction.Stopped:
+                    Motor.stop()
+                    direction = Direction.Stopped
+
+                # We have not detected the magnet in a while, so we have stopped
+                if unix_epoch() - RunData.magnet_time >= MAGNET_FREE_STALL_FOR_SECONDS:
+                    MutexStartData.run_stage += 1
+            case RunStage.CautiousBackward:
+                if direction == Direction.Backward:
+                    # Exceeded magnet hits
+                    if RunData.magnet_hits_cautiously_reversing >= NUMBER_OF_MAGNETS:
+                        direction = Direction.Stopped
+                        Motor.stop()
+                        RunData.magnet_hits_cautiously_reversing = 0.0
+                        RunData.stop_cautious_reversing_time = unix_epoch()
+                else:  # Stopped
+                    # Free to go again
+                    if (
+                        unix_epoch()
+                        >= RunData.stop_cautious_reversing_time
+                        + CAUTIOUS_REVERSE_STALL_FOR_SECONDS
+                    ):
+                        direction = Direction.Backward
+                        Motor.backward()
+
+                # Exceeded distance
+                if (
+                    arguments.distance
+                    <= MutexStartData.distance.distance
+                    + BACKWARD_LEEWAY_DISTANCE_CENTIMETERS
+                ):
+                    Motor.stop()
+                    direction = Direction.Stopped
+                    MutexStartData.run_stage += 1
 
     stop(stop_start_thread=False)
     send_status()
@@ -227,7 +262,7 @@ def stop(*_args, stop_start_thread: bool = True, **_kwargs) -> StopResponse:
     if stop_start_thread:
         MutexStartData.start_thread.join()
     try:
-        MutexStartData.distance_information_lock.release()
+        MutexStartData.lock.release()
     except Exception:
         ...
 
@@ -246,13 +281,13 @@ def static_status(_: SerialEvent) -> StaticStatusResponse:
 
 def status(_: SerialEvent) -> StatusResponse:
     # Get distance information
-    if not MutexStartData.distance_information_lock.acquire(timeout=1.0):
-        return ServerException(
+    if not MutexStartData.lock.acquire(timeout=1.0):
+        raise ServerException(
             enum_variant=Error.FailedStatusCouldNotAcquireDistanceLock,
             inner=RuntimeError("The distance information mutex lock was not acquired"),
         )
     distance = MutexStartData.distance
-    MutexStartData.distance_information_lock.release()
+    MutexStartData.lock.release()
 
     return StatusResponse(
         running=MutexStartData.started_flag.is_set(),

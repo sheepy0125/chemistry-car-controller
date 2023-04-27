@@ -1,15 +1,17 @@
 {
     "cSpell.words": [
         "chrono",
+        "consts",
         "eframe",
         "egui",
         "epaint",
+        "gpio",
+        "GPIO",
         "repr",
         "scip",
         "serialport",
         "STATICSTATUS",
-        "Uart",
-        "consts"
+        "Uart"
     ],
     "rust-analyzer.linkedProjects": [
         "./client/Cargo.toml",

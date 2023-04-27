@@ -49,11 +49,12 @@ pub enum ServerError {
     MalformedRequestFailedMetadataParsing = 4_u8,
     MalformedRequestTypeError = 5_u8,
     MalformedRequestOtherError = 6_u8,
-    Filler7 = 7_u8,
-    Filler8 = 8_u8,
-    Filler9 = 9_u8,
+    _RequestErrorUpperBound = 7_u8,
+    _ResponseErrorLowerBound = 8_u8,
     MalformedResponseTypeError = 10_u8,
     MalformedResponseOtherError = 11_u8,
+    _ResponseErrorUpperBound = 12_u8,
+    _SpecificErrorLowerBound = 13_u8,
     FailedToStartAlreadyStarted = 21_u8,
     FailedToStartMagnetOdometerFailed = 22_u8,
     FailedToStartMotorControlFailed = 23_u8,
@@ -61,7 +62,7 @@ pub enum ServerError {
     FailedToStopStartThreadWouldNotRespond = 25_u8,
     FailedStatusCouldNotAcquireDistanceLock = 26_u8,
     FailedPingNegativeLatency = 27_u8,
-    _UpperBound = 28_u8,
+    _SpecificErrorUpperBound = 28_u8,
     AnyOtherError = 99_u8,
 }
 impl TryFrom<u8> for ServerError {
@@ -69,7 +70,12 @@ impl TryFrom<u8> for ServerError {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         // Ensure not out of bounds
-        if value >= Self::_UpperBound as u8 && value != 99_u8 {
+        if (value > 0 && value <= Self::_RequestErrorUpperBound as u8)
+            || (value >= Self::_ResponseErrorLowerBound as u8
+                && value <= Self::_ResponseErrorUpperBound as u8)
+            || (value >= Self::_SpecificErrorLowerBound as u8
+                && value <= Self::_SpecificErrorUpperBound as u8)
+        {
             Err(())?;
         }
         // Safety: not out of bounds
@@ -221,8 +227,8 @@ pub struct StopResponse;
 // Static status
 
 #[derive(Serialize, Deserialize)]
-pub struct StaticStatusArguments; //             I don't have the Pi with me so I am
-#[derive(Deserialize, Serialize)] //             pretending to be it :)
+pub struct StaticStatusArguments;
+#[derive(Deserialize, Serialize)]
 pub struct StaticStatusResponse {
     pub number_of_magnets: usize,
     pub wheel_diameter: f64,

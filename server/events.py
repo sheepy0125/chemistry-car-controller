@@ -295,6 +295,7 @@ class SerialEventPropagator:
                     "Failed getting the `rx` buffer from the serial connection!"
                 )
                 Logger.log_error(e)
+                raise  # If the serial port disconnects, it *is not coming back*.
 
             if rx is None:
                 continue
