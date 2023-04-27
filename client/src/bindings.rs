@@ -8,6 +8,7 @@
 use crate::events::Event;
 use num_derive::FromPrimitive;
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{fmt::Display, mem::transmute};
 use thiserror::Error as ThisError;
 
@@ -243,6 +244,41 @@ pub struct DistanceInformation {
     pub velocity: f64,
     pub magnet_hit_counter: usize,
 }
+#[repr(u8)]
+#[derive(Deserialize_repr, Serialize_repr, Clone, Copy)]
+pub enum StatusStage {
+    Stopped = 0_u8,
+    Finalized = 4_u8,
+    VehementForward = 1_u8,
+    StallOvershoot = 2_u8,
+    CautiousBackward = 3_u8,
+}
+impl TryFrom<u8> for StatusStage {
+    type Error = ();
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        if value > Self::Finalized as u8 {
+            Err(())?;
+        }
+        Ok(unsafe { transmute((Self::Stopped as u8) + value) })
+    }
+}
+impl Display for StatusStage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use StatusStage::*;
+        writeln!(
+            f,
+            "{}",
+            match *self {
+                Stopped => "Stopped",
+                Finalized => "Finalized",
+                VehementForward => "Forward",
+                StallOvershoot => "Coast",
+                CautiousBackward => "Backward",
+            }
+        )
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct StatusArguments;
 #[derive(Deserialize, Serialize)]
@@ -250,6 +286,7 @@ pub struct StatusResponse {
     pub running: bool,
     pub uptime: usize,
     pub runtime: usize,
+    pub stage: StatusStage,
     pub distance: DistanceInformation,
 }
 

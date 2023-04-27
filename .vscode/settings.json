@@ -11,6 +11,7 @@
         "scip",
         "serialport",
         "STATICSTATUS",
+        "thiserror",
         "Uart"
     ],
     "rust-analyzer.linkedProjects": [

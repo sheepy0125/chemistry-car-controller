@@ -1,7 +1,7 @@
-2023/04/24 16:05:56 socat[48386] N PTY is /dev/pts/1
-2023/04/24 16:05:56 socat[48386] N PTY is /dev/pts/7
-2023/04/24 16:05:56 socat[48386] N starting data transfer loop with FDs [5,5] and [7,7]
-2023/04/24 16:07:22 socat[48386] N socat_signal(): handling signal 2
-2023/04/24 16:07:22 socat[48386] N exiting on signal 2
-2023/04/24 16:07:22 socat[48386] N socat_signal(): finishing signal 2
-2023/04/24 16:07:22 socat[48386] N exit(130)
+2023/04/27 16:03:38 socat[25828] N PTY is /dev/pts/8
+2023/04/27 16:03:38 socat[25828] N PTY is /dev/pts/9
+2023/04/27 16:03:38 socat[25828] N starting data transfer loop with FDs [5,5] and [7,7]
+2023/04/27 16:03:42 socat[25828] N socat_signal(): handling signal 2
+2023/04/27 16:03:42 socat[25828] N exiting on signal 2
+2023/04/27 16:03:42 socat[25828] N socat_signal(): finishing signal 2
+2023/04/27 16:03:42 socat[25828] N exit(130)

@@ -319,6 +319,7 @@ impl ClientGUIHandlers for ClientGUI {
             .column(Column::auto()) // Distance
             .column(Column::auto()) // Velocity
             .column(Column::auto()) // Magnet odometer hits
+            .column(Column::auto()) // Stage
             .min_scrolled_height(0.0);
 
         status_table
@@ -327,13 +328,16 @@ impl ClientGUIHandlers for ClientGUI {
                     ui.strong("Runtime");
                 });
                 header.col(|ui| {
-                    ui.strong("Distance (cm)");
+                    ui.strong("Distance");
                 });
                 header.col(|ui| {
-                    ui.strong("Velocity (cm/s)");
+                    ui.strong("Speed");
                 });
                 header.col(|ui| {
-                    ui.strong("Magnet hits");
+                    ui.strong("Spins");
+                });
+                header.col(|ui| {
+                    ui.strong("Status");
                 });
             })
             .body(|mut body| {
@@ -343,13 +347,16 @@ impl ClientGUIHandlers for ClientGUI {
                             ui.label(format!("{}", status.value.runtime));
                         });
                         row.col(|ui| {
-                            ui.label(format!("{:.3}", status.value.distance.distance));
+                            ui.label(format!("{:.3}cm", status.value.distance.distance));
                         });
                         row.col(|ui| {
-                            ui.label(format!("{:.3}", status.value.distance.velocity));
+                            ui.label(format!("{:.3}cm/s", status.value.distance.velocity));
                         });
                         row.col(|ui| {
                             ui.label(format!("{}", status.value.distance.magnet_hit_counter));
+                        });
+                        row.col(|ui| {
+                            ui.label(format!("{}", status.value.stage));
                         });
                     });
                 }

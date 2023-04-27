@@ -1,9 +1,3 @@
 Initializing the serial port... done!
 Initializing the bluetooth adapter... done!
-Connecting to the Wireless UART device... done!
-Writing ?PING${"time":1682366768.238}${"time":1682366768.2382176}
- to bluetooth device
-Writing ?STATICSTATUS${}${"time":1682366769.46771}
- to bluetooth device
-Writing ?START${"distance":100.0,"reverse_brake":false}${"time":1682366770.5092902}
- to bluetooth device
+Connecting to the Wireless UART device... 

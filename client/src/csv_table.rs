@@ -35,6 +35,10 @@ impl CSVInterface for CSVDynamicStatus {
             let distance = record[4].parse()?;
             let velocity = record[5].parse()?;
             let magnet_hit_counter = record[6].parse()?;
+            let stage = record[7]
+                .parse::<u8>()?
+                .try_into()
+                .map_err(|_| "Failed to get status stage")?;
 
             ret_events.push(Event {
                 command: Command::Status,
@@ -49,6 +53,7 @@ impl CSVInterface for CSVDynamicStatus {
                         velocity,
                         magnet_hit_counter,
                     },
+                    stage,
                 },
                 metadata: MetaData { time },
             });
@@ -69,6 +74,7 @@ impl CSVInterface for CSVDynamicStatus {
             "Distance in centimeters",
             "Velocity in centimeters/second",
             "Magnet hit counter",
+            "Stage",
         ])?;
 
         for record in data {
@@ -79,6 +85,7 @@ impl CSVInterface for CSVDynamicStatus {
             let distance = format!("{}", record.value.distance.distance);
             let velocity = format!("{}", record.value.distance.velocity);
             let magnet_hit_counter = format!("{}", record.value.distance.magnet_hit_counter);
+            let stage = format!("{}", record.value.stage as u8);
             csv_writer.write_record([
                 time,
                 running,
@@ -87,6 +94,7 @@ impl CSVInterface for CSVDynamicStatus {
                 distance,
                 velocity,
                 magnet_hit_counter,
+                stage,
             ])?;
         }
 
