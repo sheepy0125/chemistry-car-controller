@@ -158,7 +158,7 @@ def start_thread(arguments: StartArguments):
                     uptime=current_time - START_UPTIME,
                     runtime=current_time - MutexStartData.started_time,
                     distance=MutexStartData.distance,
-                    run_stage=MutexStartData.run_stage,
+                    stage=MutexStartData.run_stage,
                 ),
                 metadata=MetaData(unix_epoch()),
             )
@@ -183,30 +183,32 @@ def start_thread(arguments: StartArguments):
             break
 
         # Status
-        if unix_epoch() >= next_status_poll:
-            next_status_poll += STATUS_POLL_DURATION_SECONDS
+        if unix_epoch() >= RunData.next_status_poll_time:
+            RunData.next_status_poll_time += STATUS_POLL_DURATION_SECONDS
             send_status()
 
         # Keep track of distance
         if MutexStartData.magnet_hit_flag.is_set():
             MutexStartData.magnet_hit_flag.clear()
-            Logger.verbose(
-                f"Adding {direction=} to {MutexStartData.distance.magnet_hit_counter=}"
-            )
-            MutexStartData.distance.magnet_hit_counter += direction
+            MutexStartData.distance.magnet_hit_counter += 1
+            # Incase we are reversing, we want the distance to show that
+            multiplier = 1
+            if direction == Direction.Backward:
+                multiplier = -1
             MutexStartData.distance.distance += (
                 WHEEL_CIRCUMFERENCE_CENTIMETERS / NUMBER_OF_MAGNETS
-            ) * direction
+            ) * multiplier
             MutexStartData.distance.velocity = MutexStartData.distance.distance / (
                 unix_epoch() - MutexStartData.started_time
             )
-            RunData.magnet_hit = unix_epoch()
+            RunData.magnet_time = unix_epoch()
 
         match MutexStartData.run_stage:
             case RunStage.Stopped | RunStage.Finalized:
                 break
             case RunStage.VehementForward:
                 if direction != Direction.Forward:
+                    Logger.verbose("Vehement forward stage")
                     Motor.forward()
                     direction = Direction.Forward
 
@@ -218,16 +220,18 @@ def start_thread(arguments: StartArguments):
                     MutexStartData.run_stage += 1
             case RunStage.StallOvershoot:
                 if direction != Direction.Stopped:
+                    Logger.verbose("Stall overshoot stage")
                     Motor.stop()
                     direction = Direction.Stopped
 
                 # We have not detected the magnet in a while, so we have stopped
                 if unix_epoch() - RunData.magnet_time >= MAGNET_FREE_STALL_FOR_SECONDS:
                     MutexStartData.run_stage += 1
+                    Logger.verbose("Cautious backward stage")
             case RunStage.CautiousBackward:
                 if direction == Direction.Backward:
                     # Exceeded magnet hits
-                    if RunData.magnet_hits_cautiously_reversing >= NUMBER_OF_MAGNETS:
+                    if RunData.magnet_hits_cautiously_reversing >= 1 # FIXME: Use NUMBER_OF_MAGNETS instead?
                         direction = Direction.Stopped
                         Motor.stop()
                         RunData.magnet_hits_cautiously_reversing = 0.0
@@ -244,9 +248,9 @@ def start_thread(arguments: StartArguments):
 
                 # Exceeded distance
                 if (
-                    arguments.distance
-                    <= MutexStartData.distance.distance
-                    + BACKWARD_LEEWAY_DISTANCE_CENTIMETERS
+                    MutexStartData.distance.distance
+                    - BACKWARD_LEEWAY_DISTANCE_CENTIMETERS
+                    <= arguments.distance
                 ):
                     Motor.stop()
                     direction = Direction.Stopped
@@ -283,10 +287,11 @@ def status(_: SerialEvent) -> StatusResponse:
     # Get distance information
     if not MutexStartData.lock.acquire(timeout=1.0):
         raise ServerException(
-            enum_variant=Error.FailedStatusCouldNotAcquireDistanceLock,
-            inner=RuntimeError("The distance information mutex lock was not acquired"),
+            enum_variant=Error.FailedStatusCouldNotAcquireDistanceLock,  # FIXME: change name
+            inner=RuntimeError("The mutex lock was not acquired"),
         )
     distance = MutexStartData.distance
+    stage = MutexStartData.run_stage
     MutexStartData.lock.release()
 
     return StatusResponse(
@@ -294,6 +299,7 @@ def status(_: SerialEvent) -> StatusResponse:
         runtime=(unix_epoch() - MutexStartData.started_time),
         uptime=(unix_epoch() - START_UPTIME),
         distance=distance,
+        stage=stage,
     )
 
 

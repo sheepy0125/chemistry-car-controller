@@ -1,3 +1,91 @@
 Initializing the serial port... done!
 Initializing the bluetooth adapter... done!
-Connecting to the Wireless UART device... 
+Connecting to the Wireless UART device... done!
+Writing ?PING${"time":1682642794.239}${"time":1682642794.2391853}
+ to bluetooth device
+Writing ?STATICSTATUS${}${"time":1682642795.5169413}
+ to bluetooth device
+Writing ?START${"distance":100.0,"reverse_brake":false}${"time":1682642796.5589125}
+ to bluetooth device
+Writing ?STOP${}${"time":1682642823.2410645}
+ to bluetooth device
+Writing ?PING${"time":1682643077.15}${"time":1682643077.1505635}
+ to bluetooth device
+Writing ?STATICSTATUS${}${"time":1682643078.3104253}
+ to bluetooth device
+Writing ?START${"distance":100.0,"reverse_brake":false}${"time":1682643079.2479062}
+ to bluetooth device
+Writing ?STOP${}${"time":1682643103.018885}
+ to bluetooth device
+Writing ?PING${"time":1682643122.019}${"time":1682643122.0192454}
+ to bluetooth device
+Writing ?STATICSTATUS${}${"time":1682643123.1024127}
+ to bluetooth device
+Writing ?START${"distance":100.0,"reverse_brake":false}${"time":1682643123.9358249}
+ to bluetooth device
+Writing ?STOP${}${"time":1682643128.5050046}
+ to bluetooth device
+Writing ?PING${"time":1682643167.581}${"time":1682643167.5816374}
+ to bluetooth device
+Writing ?STATICSTATUS${}${"time":1682643168.831781}
+ to bluetooth device
+Writing ?START${"distance":100.0,"reverse_brake":false}${"time":1682643169.7695}
+ to bluetooth device
+Writing ?STOP${}${"time":1682643205.0472717}
+ to bluetooth device
+Writing ?PING${"time":1682643281.929}${"time":1682643281.9295878}
+ to bluetooth device
+Writing ?STATICSTATUS${}${"time":1682643283.068671}
+ to bluetooth device
+Writing ?START${"distance":100.0,"reverse_brake":false}${"time":1682643284.1103075}
+ to bluetooth device
+Writing ?STOP${}${"time":1682643308.5134606}
+ to bluetooth device
+Writing ?PING${"time":1682643312.096}${"time":1682643312.096611}
+ to bluetooth device
+Writing ?STATICSTATUS${}${"time":1682643313.2772424}
+ to bluetooth device
+Writing ?START${"distance":100.0,"reverse_brake":false}${"time":1682643314.2149122}
+ to bluetooth device
+Writing ?STOP${}${"time":1682643320.2422898}
+ to bluetooth device
+Writing ?PING${"time":1682643357.77}${"time":1682643357.7706008}
+ to bluetooth device
+Writing ?STATICSTATUS${}${"time":1682643359.0066128}
+ to bluetooth device
+Writing ?START${"distance":50.0,"reverse_brake":false}${"time":1682643360.0487936}
+ to bluetooth device
+Writing ?STOP${}${"time":1682643405.256718}
+ to bluetooth device
+Writing ?PING${"time":1682643408.743}${"time":1682643408.7430348}
+ to bluetooth device
+Writing ?STATICSTATUS${}${"time":1682643409.8402545}
+ to bluetooth device
+Writing ?START${"distance":50.0,"reverse_brake":false}${"time":1682643410.77801}
+ to bluetooth device
+Writing ?STOP${}${"time":1682643415.6918347}
+ to bluetooth device
+Writing ?PING${"time":1682643545.244}${"time":1682643545.244246}
+ to bluetooth device
+Writing ?STATICSTATUS${}${"time":1682643546.4036322}
+ to bluetooth device
+Writing ?START${"distance":50.0,"reverse_brake":false}${"time":1682643547.3412926}
+ to bluetooth device
+Writing ?STOP${}${"time":1682643556.8549376}
+ to bluetooth device
+Writing ?PING${"time":1682643573.355}${"time":1682643573.3551004}
+ to bluetooth device
+Writing ?STATICSTATUS${}${"time":1682643574.6261694}
+ to bluetooth device
+Writing ?START${"distance":100.0,"reverse_brake":false}${"time":1682643575.6678998}
+ to bluetooth device
+Writing ?STOP${}${"time":1682643625.0706086}
+ to bluetooth device
+Writing ?PING${"time":1682643629.605}${"time":1682643629.6055002}
+ to bluetooth device
+Writing ?STATICSTATUS${}${"time":1682643630.876413}
+ to bluetooth device
+Writing ?START${"distance":100.0,"reverse_brake":false}${"time":1682643631.8140748}
+ to bluetooth device
+Writing ?STOP${}${"time":1682643772.8077884}
+ to bluetooth device

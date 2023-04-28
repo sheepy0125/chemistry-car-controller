@@ -425,13 +425,13 @@ class StatusResponse(SerializableStruct):
         uptime: int,
         runtime: int,
         distance: DistanceInformation,
-        run_stage: int,
+        stage: int,
     ):
         self.running = bool(running)
         self.uptime = unsigned_int(uptime)
         self.runtime = unsigned_int(runtime)
         self.distance = distance.__dict__
-        self.run_stage = run_stage
+        self.stage = stage
 
     @property
     def __dict__(self) -> dict:
@@ -440,7 +440,7 @@ class StatusResponse(SerializableStruct):
             "uptime": self.uptime,
             "runtime": self.runtime,
             "distance": self.distance,
-            "run_stage": self.run_stage,
+            "stage": self.stage,
         }
 
 
