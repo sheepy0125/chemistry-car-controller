@@ -7,6 +7,7 @@ This allows the car's motor to drive and reverse with an external DC power sourc
 ## Modus operandi
 
 There are four parts to this:
+
 1. Power source
 2. Breadboard
 3. 4-Channel relay
@@ -30,6 +31,7 @@ Backward NEG = Relay 4
 ```
 
 ### Forward
+
 ```
 Backward POS -> LOW
 Backward NEG -> LOW
@@ -39,6 +41,7 @@ Forward  NEG -> HIGH
 ```
 
 ### Backward
+
 ```
 Forward  POS -> LOW
 Forward  NEG -> LOW
@@ -48,6 +51,7 @@ Backward NEG -> HIGH
 ```
 
 ### Stop
+
 ```
 Forward  POS -> LOW
 Forward  NEG -> LOW

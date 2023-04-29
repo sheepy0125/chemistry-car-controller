@@ -10,11 +10,11 @@ For information on how these two scrumptious yet rare pastries communicate, see 
 
 ### Features
 
-- Distance input (with overflow)
-- Run / stop / reset buttons
-- Ping test
-- Static status
-- Status table
-- Saving and loading previous runs
-- Showing error messages without crashing
-- Being written in Rust (makes it 100x better, obviously)
+-   Distance input (with overflow)
+-   Run / stop / reset buttons
+-   Ping test
+-   Static status
+-   Status table
+-   Saving and loading previous runs
+-   Showing error messages without crashing
+-   Being written in Rust (makes it 100x better, obviously)

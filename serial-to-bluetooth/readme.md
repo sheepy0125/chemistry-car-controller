@@ -13,6 +13,7 @@ The R41Z-EVAL will be plugged into the Raspberry Pi 1B on the car and give comma
 The R41Z-EVAL will connect to the Raspberry Pi 3B (where the R41Z is a peripheral device / master and the Raspberry Pi 3B is a central device / slave) and have a write-only characteristic for Tx and a read-only characteristic for Rx, as seen by the Raspberry Pi 3B (the slave).
 
 Below is a list of the useful GATT attributes as shown by `bluetoothctl` in `menu gatt` mode by running `list-attributes`, with some comments denoted by `#`:
+
 ```
 Primary Service (Handle 0x0000)
 	/org/bluez/hci0/dev_00_60_37_E9_0B_6F/service0011               # Service for TX and RX
@@ -30,8 +31,7 @@ Characteristic (Handle 0x0000)
 
 Below also is a table corroborating with the `bluetoothctl` output above:
 
-|Attribute UUID|Permissions|Size|Type|Role from client (RPi3B) view|
-|---|---|---|---|---|
-|01ff0101-ba5e-f4ee-5ca1-eb1e5e4b1ce0|Writable|1|ASCII|TX|
-|01ff0101-ba5e-f4ee-5ca1-eb1e5e4b1ce1|Readable|244|ASCII|RX|
-
+| Attribute UUID                       | Permissions | Size | Type  | Role from client (RPi3B) view |
+| ------------------------------------ | ----------- | ---- | ----- | ----------------------------- |
+| 01ff0101-ba5e-f4ee-5ca1-eb1e5e4b1ce0 | Writable    | 1    | ASCII | TX                            |
+| 01ff0101-ba5e-f4ee-5ca1-eb1e5e4b1ce1 | Readable    | 244  | ASCII | RX                            |
