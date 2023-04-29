@@ -231,7 +231,9 @@ def start_thread(arguments: StartArguments):
             case RunStage.CautiousBackward:
                 if direction == Direction.Backward:
                     # Exceeded magnet hits
-                    if RunData.magnet_hits_cautiously_reversing >= 1 # FIXME: Use NUMBER_OF_MAGNETS instead?
+                    if (
+                        RunData.magnet_hits_cautiously_reversing >= 1
+                    ):  # FIXME: Use NUMBER_OF_MAGNETS instead?
                         direction = Direction.Stopped
                         Motor.stop()
                         RunData.magnet_hits_cautiously_reversing = 0.0
