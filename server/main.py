@@ -191,6 +191,7 @@ def start_thread(arguments: StartArguments):
         if MutexStartData.magnet_hit_flag.is_set():
             MutexStartData.magnet_hit_flag.clear()
             MutexStartData.distance.magnet_hit_counter += 1
+            RunData.magnet_hits_cautiously_reversing += 1
             # Incase we are reversing, we want the distance to show that
             multiplier = 1
             if direction == Direction.Backward:
@@ -236,7 +237,7 @@ def start_thread(arguments: StartArguments):
                     ):  # FIXME: Use NUMBER_OF_MAGNETS instead?
                         direction = Direction.Stopped
                         Motor.stop()
-                        RunData.magnet_hits_cautiously_reversing = 0.0
+                        RunData.magnet_hits_cautiously_reversing = 0
                         RunData.stop_cautious_reversing_time = unix_epoch()
                 else:  # Stopped
                     # Free to go again
