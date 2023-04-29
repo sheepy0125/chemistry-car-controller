@@ -6,7 +6,7 @@ Created by sheepy0125 | MIT License | 2023-04-14
 
 from RPi import GPIO
 from time import sleep
-from shared import MOTOR_CONTROLLER_SAFETY_DELAY
+from shared import MOTOR_CONTROLLER_SAFETY_DELAY_SECONDS
 from utils import Logger
 from bindings import GPIOPin, Direction
 
@@ -102,7 +102,7 @@ class Motor:
 
         if wait:
             Logger.verbose("Pausing for safety")
-            sleep(MOTOR_CONTROLLER_SAFETY_DELAY)
+            sleep(MOTOR_CONTROLLER_SAFETY_DELAY_SECONDS)
 
         # Extra ensure
         if not first.ensure(first_to):
