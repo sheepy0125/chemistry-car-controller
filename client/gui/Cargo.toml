@@ -1,5 +1,5 @@
 [package]
-name = "client"
+name = "gui"
 version = "0.1.0"
 edition = "2021"
 
@@ -20,5 +20,7 @@ serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.93"
 serde_repr = "0.1.12"
 serialport = { version = "4.2.0", default-features = false }
-smart-default = "0.6.0"
+smart-default = "0.7.1"
 thiserror = "1.0.38"
+
+bindings = { path = "../bindings" }

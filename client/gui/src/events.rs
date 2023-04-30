@@ -7,29 +7,21 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /***** Setup *****/
 // Imports
-use crate::bindings::{
-    ClientError, Command, ErrorResponse, MetaData, PingResponse, Response, StartResponse,
-    StaticStatusResponse, StatusResponse, StopResponse, TransitMode, TransitType,
+use bindings::{
+    BluetoothStatusResponse, ClientError, Command, ErrorResponse, Event, MetaData, PingResponse,
+    Response, StartResponse, StaticStatusResponse, StatusResponse, StopResponse, TransitMode,
+    TransitType,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str as serde_from_str, to_string as serde_to_string};
 use serialport::SerialPort;
 use smart_default::SmartDefault;
 use std::mem::take;
-/// Event encapsulating a request or response
-pub struct Event<S>
-where
-    S: Serialize + for<'a> Deserialize<'a>,
-{
-    pub command: Command,
-    pub transit_mode: TransitMode,
-    pub transit_type: TransitType,
-    pub value: S,
-    pub metadata: MetaData,
-}
+
 /// Run data
 #[derive(SmartDefault)]
 pub struct RunData {
+    pub bluetooth_bridge_connected: bool,
     pub ping_status_response: Option<(Box<Event<PingResponse>>, f64)>,
     pub static_status_response: Option<Box<Event<StaticStatusResponse>>>,
     pub status_responses: Vec<Event<StatusResponse>>,
@@ -105,7 +97,7 @@ impl SerialEventPropagator {
     where
         S: Serialize + for<'a> Deserialize<'a> + Sized,
     {
-        let prefix = TransitMode::ClientToServerRequest as u8 as char;
+        let prefix = TransitMode::from(command) as u8 as char;
         let stringified_data =
             serde_to_string(&data).map_err(|e| ClientError::Parse(e.to_string()))?;
         let stringified_data = match stringified_data.as_str() {
@@ -130,13 +122,18 @@ impl SerialEventPropagator {
     }
 
     /// Helper function to encapsulate a *response* into an event
-    fn encapsulate_response_to_event<S>(command: Command, metadata: MetaData, value: S) -> Event<S>
+    fn encapsulate_response_to_event<S>(
+        transit_mode: TransitMode,
+        command: Command,
+        metadata: MetaData,
+        value: S,
+    ) -> Event<S>
     where
         S: Serialize + for<'a> Deserialize<'a> + Sized,
     {
         Event {
             command,
-            transit_mode: TransitMode::ServerToClientResponse,
+            transit_mode,
             transit_type: TransitType::Response,
             value,
             metadata,
@@ -145,16 +142,29 @@ impl SerialEventPropagator {
 
     /// Parse response
     pub fn parse_response(data: &str) -> Result<Response, ClientError> {
+        let data = data.trim();
+
         // Sanity check (to prevent out of range panics)
-        if data.len() < 5 {
+        // 5 is just an arbitrary (empirical?) value
+        if data.chars().take(5).count() < 5 {
             Err(ClientError::Parse(
                 "Too short to be a valid response".to_owned(),
             ))?;
         }
 
+        // Find the transit *mode*
+        // Safety: Length is guaranteed to be at least 5 characters
+        let first_char = data.chars().next().unwrap();
+        let transit_mode = match first_char {
+            '~' => Ok(TransitMode::ServerToClientResponse),
+            '&' => Ok(TransitMode::SerialBridgeToClientResponse),
+            _ => Err(ClientError::Parse(format!(
+                "Failed to determine transit mode of `{first_char}`"
+            ))),
+        }?;
+
         // Find the command
         let split_data = data.trim().split('$').collect::<Vec<_>>();
-        println!("{split_data:?}");
         let command = Command::try_from(split_data[0][1..].to_string())?;
 
         // Find the metadata
@@ -177,38 +187,54 @@ impl SerialEventPropagator {
             Command::Error => {
                 let value = serde_from_str::<ErrorResponse>(response_data)?;
                 Ok(Response::Error(Self::encapsulate_response_to_event(
-                    command, metadata, value,
+                    transit_mode,
+                    command,
+                    metadata,
+                    value,
                 )))
             }
             _ => {
                 use Command::*;
                 Ok(match command {
                     Ping => Response::Ping(Self::encapsulate_response_to_event(
+                        transit_mode,
                         command,
                         metadata,
                         serde_from_str::<PingResponse>(response_data)?,
                     )),
                     Start => Response::Start(Self::encapsulate_response_to_event(
+                        transit_mode,
                         command,
                         metadata,
                         serde_from_str::<StartResponse>(response_data)?,
                     )),
                     Stop => Response::Stop(Self::encapsulate_response_to_event(
+                        transit_mode,
                         command,
                         metadata,
                         serde_from_str::<StopResponse>(response_data)?,
                     )),
                     Status => Response::Status(Self::encapsulate_response_to_event(
+                        transit_mode,
                         command,
                         metadata,
                         serde_from_str::<StatusResponse>(response_data)?,
                     )),
                     StaticStatus => Response::StaticStatus(Self::encapsulate_response_to_event(
+                        transit_mode,
                         command,
                         metadata,
                         serde_from_str::<StaticStatusResponse>(response_data)?,
                     )),
-                    _ => unreachable!(),
+                    BluetoothStatus => {
+                        Response::BluetoothStatus(Self::encapsulate_response_to_event(
+                            transit_mode,
+                            command,
+                            metadata,
+                            serde_from_str::<BluetoothStatusResponse>(response_data)?,
+                        ))
+                    }
+                    _ => panic!("Got unhandled command {command}"),
                 })
             }
         }

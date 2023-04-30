@@ -17,8 +17,8 @@
         "wirelessly"
     ],
     "rust-analyzer.linkedProjects": [
-        "./client/Cargo.toml",
-        "./serial-to-bluetooth/Cargo.toml",
-        "./client/Cargo.toml"
+        "./client/gui/Cargo.toml",
+        "./client/serial-to-bluetooth/Cargo.toml",
+        "./client/bindings/Cargo.toml"
     ]
 }

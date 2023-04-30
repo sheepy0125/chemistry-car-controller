@@ -1,19 +1,32 @@
 /*!
- * Bindings for the client
+ * Shared types for all client related stuff
  * Created by sheepy0125 | MIT License | 2023-02-19
  */
 
 /***** Setup *****/
 // Imports
-use crate::events::Event;
 use num_derive::FromPrimitive;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::{fmt::Display, mem::transmute};
+use std::{convert::TryFrom, fmt::Display, mem::transmute};
 use thiserror::Error as ThisError;
 
 // Constants
 pub const BAUD_RATE: u32 = 115200_u32;
+
+/***** Events *****/
+
+/// Event encapsulating a request or response
+pub struct Event<S>
+where
+    S: Serialize + for<'a> Deserialize<'a>,
+{
+    pub command: Command,
+    pub transit_mode: TransitMode,
+    pub transit_type: TransitType,
+    pub value: S,
+    pub metadata: MetaData,
+}
 
 /***** Error *****/
 
@@ -130,6 +143,25 @@ pub struct MetaData {
 pub enum TransitMode {
     ClientToServerRequest = b'?',
     ServerToClientResponse = b'~',
+    ClientToSerialBridgeRequest = b'^',
+    SerialBridgeToClientResponse = b'&',
+}
+impl From<Command> for TransitMode {
+    fn from(value: Command) -> Self {
+        use Command::*;
+        use TransitMode::*;
+        match value {
+            Ping => ClientToServerRequest,
+            Start => ClientToServerRequest,
+            Stop => ClientToServerRequest,
+            Status => ClientToServerRequest,
+            StaticStatus => ClientToServerRequest,
+            Error => ClientToServerRequest,
+            Connect => ClientToSerialBridgeRequest,
+            Disconnect => ClientToSerialBridgeRequest,
+            BluetoothStatus => ClientToSerialBridgeRequest,
+        }
+    }
 }
 
 /// The type of transit
@@ -141,14 +173,19 @@ pub enum TransitType {
 
 /***** Commands *****/
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Command {
+    /* Server commands */
     Ping,
     Start,
     Stop,
     StaticStatus,
     Status,
     Error,
+    /* Serial bridge commands */
+    Connect,
+    Disconnect,
+    BluetoothStatus,
 }
 impl TryFrom<String> for Command {
     type Error = ClientError; /* Potential type collision */
@@ -162,6 +199,9 @@ impl TryFrom<String> for Command {
             "STATICSTATUS" => Ok(StaticStatus),
             "STATUS" => Ok(Status),
             "UNKNOWN" | "ERROR" => Ok(Error),
+            "CONNECT" => Ok(Connect),
+            "DISCONNECT" => Ok(Disconnect),
+            "BLUETOOTHSTATUS" => Ok(BluetoothStatus),
             _ => Err(ClientError::Parse(format!(
                 "Failed to parse command from {value}"
             ))),
@@ -181,6 +221,9 @@ impl Display for Command {
                 StaticStatus => "STATICSTATUS",
                 Status => "STATUS",
                 Error => "ERROR",
+                Connect => "CONNECT",
+                Disconnect => "DISCONNECT",
+                BluetoothStatus => "BLUETOOTHSTATUS",
             }
         )
     }
@@ -196,6 +239,7 @@ pub enum Response {
     Status(Event<StatusResponse>),
     StaticStatus(Event<StaticStatusResponse>),
     Error(Event<ErrorResponse>),
+    BluetoothStatus(Event<BluetoothStatusResponse>),
 }
 
 // Ping
@@ -278,7 +322,6 @@ impl Display for StatusStage {
         )
     }
 }
-
 #[derive(Serialize, Deserialize)]
 pub struct StatusArguments;
 #[derive(Deserialize, Serialize)]
@@ -288,6 +331,30 @@ pub struct StatusResponse {
     pub runtime: usize,
     pub stage: StatusStage,
     pub distance: DistanceInformation,
+}
+
+// Bluetooth connect
+
+#[derive(Serialize, Deserialize)]
+pub struct BluetoothConnectRequest;
+
+#[derive(Serialize, Deserialize)]
+pub struct BluetoothConnectResponse;
+
+// Bluetooth disconnect
+
+#[derive(Serialize, Deserialize)]
+pub struct BluetoothDisconnectRequest;
+#[derive(Serialize, Deserialize)]
+pub struct BluetoothDisconnectResponse;
+
+// Bluetooth status
+
+#[derive(Serialize, Deserialize)]
+pub struct BluetoothStatusRequest;
+#[derive(Serialize, Deserialize)]
+pub struct BluetoothStatusResponse {
+    pub connected: bool,
 }
 
 /***** Client status *****/

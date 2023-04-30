@@ -7,9 +7,8 @@ use std::{error::Error, fs::File, path::Path};
 
 /***** Setup *****/
 // Imports
-use crate::{
-    bindings::{Command, DistanceInformation, MetaData, StatusResponse, TransitMode, TransitType},
-    events::Event,
+use bindings::{
+    Command, DistanceInformation, Event, MetaData, StatusResponse, TransitMode, TransitType,
 };
 use csv::{Reader, Writer};
 

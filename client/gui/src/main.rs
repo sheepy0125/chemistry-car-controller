@@ -5,6 +5,7 @@
 
 /***** Setup *****/
 // Imports
+use bindings::*;
 use chrono::{DateTime, Local};
 use eframe::{epaint::vec2, run_native, App, NativeOptions};
 use egui::{
@@ -21,8 +22,6 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-pub mod bindings;
-use bindings::*;
 pub mod events;
 use events::*;
 pub mod shared;
@@ -61,6 +60,8 @@ pub struct GUIData {
     pub reverse_braking: bool,
     #[default = false]
     pub expanded_status_table: bool,
+    #[default = true]
+    pub show_bluetooth_connect_screen: bool,
     pub current_job: ClientStatus,
     #[default = "status.csv"]
     pub display_file_path: String,
@@ -89,6 +90,7 @@ pub trait ClientGUIHandlers {
     fn new(serial_event_propagator: SerialEventPropagator) -> Self;
     fn get_serial_responses(&mut self) -> Result<(), ClientError>;
     fn show_error_messages(&mut self, ctx: &Context);
+    fn show_bluetooth_connect_screen(&mut self, ctx: &Context);
     fn show_status_table(&self, ui: &mut Ui);
     fn logic(&mut self);
     fn start(&mut self);
@@ -109,6 +111,66 @@ impl ClientGUIHandlers for ClientGUI {
             gui_data: Default::default(),
             errors: Default::default(),
         }
+    }
+
+    /// Show the bluetooth connection screen
+    fn show_bluetooth_connect_screen(&mut self, ctx: &Context) {
+        Window::new("Microwave-Blaster 9000 Utility")
+            .resizable(false)
+            .show(ctx, |ui| {
+                let close_button_size = [60., 40.];
+                if ui
+                    .add_sized(close_button_size, Button::new("Close"))
+                    .clicked()
+                {
+                    self.gui_data.show_bluetooth_connect_screen = false;
+                };
+
+                ui.heading(format!(
+                    "We *think* we are {}",
+                    match self.run_data.bluetooth_bridge_connected {
+                        true => "CONNECTED",
+                        false => "DISCONNECTED",
+                    },
+                ));
+
+                ui.horizontal(|ui| {
+                    let bluetooth_control_button_size = [80., 40.];
+                    if ui
+                        .add_sized(bluetooth_control_button_size, Button::new("Connect"))
+                        .clicked()
+                    {
+                        self.serial_event_propagator
+                            .write_to_serial(Command::Connect, BluetoothConnectRequest {})
+                            .unwrap_or_else(|e| {
+                                self.errors
+                                    .push(ErrorData::new(ClientError::Serial(e.to_string())))
+                            });
+                    }
+                    if ui
+                        .add_sized(bluetooth_control_button_size, Button::new("Disconnect"))
+                        .clicked()
+                    {
+                        self.serial_event_propagator
+                            .write_to_serial(Command::Disconnect, BluetoothDisconnectRequest {})
+                            .unwrap_or_else(|e| {
+                                self.errors
+                                    .push(ErrorData::new(ClientError::Serial(e.to_string())))
+                            });
+                    }
+                    if ui
+                        .add_sized(bluetooth_control_button_size, Button::new("Update status"))
+                        .clicked()
+                    {
+                        self.serial_event_propagator
+                            .write_to_serial(Command::BluetoothStatus, BluetoothStatusRequest {})
+                            .unwrap_or_else(|e| {
+                                self.errors
+                                    .push(ErrorData::new(ClientError::Serial(e.to_string())))
+                            });
+                    }
+                });
+            });
     }
 
     /// Show error messages
@@ -197,6 +259,9 @@ impl ClientGUIHandlers for ClientGUI {
                     .to_string(),
                 resp.value.message
             )))),
+            BluetoothStatus(resp) => {
+                self.run_data.bluetooth_bridge_connected = resp.value.connected;
+            }
             _ => self.run_data.other_responses.push(parsed_response),
         };
 
@@ -399,6 +464,11 @@ impl App for ClientGUI {
                 });
         }
 
+        // Show connection window
+        if self.gui_data.show_bluetooth_connect_screen {
+            self.show_bluetooth_connect_screen(ctx);
+        }
+
         ctx.set_visuals(Visuals::light());
         TopBottomPanel::top("banner")
             .resizable(false)
@@ -485,7 +555,7 @@ impl App for ClientGUI {
 
                 ui.separator();
                 use LargeButton::*;
-                let large_button_size = [150.0, 80.0];
+                let large_button_size = [150.0, 50.0];
                 let large_button = match self.run_data.running {
                     false => match self.run_data.ping_status_response.is_none()
                         && self.run_data.status_responses.is_empty()
@@ -505,6 +575,17 @@ impl App for ClientGUI {
                         Stop => self.stop(),
                     }
                 };
+
+                /* Bluetooth control panel */
+
+                ui.separator();
+                let bluetooth_control_button_size = [150., 20.];
+                if ui
+                    .add_sized(bluetooth_control_button_size, Button::new("Connection"))
+                    .clicked()
+                {
+                    self.gui_data.show_bluetooth_connect_screen = true;
+                }
             });
         SidePanel::right("status")
             .exact_width(WIDTH - 150.0)
