@@ -69,6 +69,7 @@ class MutexStartData:
     start_thread: Thread | None = None
     started_flag: ThreadEvent = ThreadEvent()
     magnet_hit_flag: ThreadEvent = ThreadEvent()
+    magnet_hits: int = 0
     e_stop_flag: ThreadEvent = ThreadEvent()
     lock: ThreadLock = ThreadLock()
     distance: DistanceInformation | None = None
@@ -95,6 +96,7 @@ def magnet_event(event: GPIOEvent) -> None:
     if not event.value:
         if MutexStartData.magnet_hit_flag.is_set():
             Logger.warn("Magnet hit event but flag is already set!!!")
+        MutexStartData.magnet_hits += 1
         MutexStartData.magnet_hit_flag.set()
     else:
         MutexStartData.magnet_hit_flag.clear()
@@ -145,6 +147,8 @@ def start_thread(arguments: StartArguments):
     should_reverse_brake = arguments.reverse_brake
 
     RunData.next_status_poll_time = unix_epoch() + STATUS_POLL_DURATION_SECONDS
+    MutexStartData.magnet_hits = 0
+    last_magnet_hits = 0
 
     def send_status():
         current_time = unix_epoch()
@@ -188,13 +192,17 @@ def start_thread(arguments: StartArguments):
             send_status()
 
         # Keep track of distance
-        if MutexStartData.magnet_hit_flag.is_set():
-            MutexStartData.magnet_hit_flag.clear()
-            MutexStartData.distance.magnet_hit_counter += 1
-            RunData.magnet_hits_cautiously_reversing += 1
+        if MutexStartData.magnet_hits > MutexStartData.distance.magnet_hit_counter:
+            RunData.magnet_hits_cautiously_reversing += (
+                MutexStartData.magnet_hits - MutexStartData.distance.magnet_hit_counter
+            )
+            MutexStartData.distance.magnet_hit_counter = MutexStartData.magnet_hits
             # Incase we are reversing, we want the distance to show that
             multiplier = 1
-            if direction == Direction.Backward:
+            if (
+                MutexStartData.run_stage == RunStage.CautiousBackward
+                or direction == Direction.Backward
+            ):
                 multiplier = -1
             MutexStartData.distance.distance += (
                 WHEEL_CIRCUMFERENCE_CENTIMETERS / NUMBER_OF_MAGNETS
@@ -232,9 +240,7 @@ def start_thread(arguments: StartArguments):
             case RunStage.CautiousBackward:
                 if direction == Direction.Backward:
                     # Exceeded magnet hits
-                    if (
-                        RunData.magnet_hits_cautiously_reversing >= 1
-                    ):  # FIXME: Use NUMBER_OF_MAGNETS instead?
+                    if RunData.magnet_hits_cautiously_reversing >= 1:
                         direction = Direction.Stopped
                         Motor.stop()
                         RunData.magnet_hits_cautiously_reversing = 0
