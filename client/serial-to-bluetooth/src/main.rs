@@ -12,22 +12,22 @@ use serialport::{new as new_serialport, SerialPort};
 use std::{
     env::args,
     io::Write,
+    str::FromStr,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use tokio::time::sleep;
-
+use tokio::time::{sleep, Instant};
 mod gatt;
 mod types;
-use gatt::{RX_CHARACTERISTIC_SIZE, RX_CHARACTERISTIC_UUID, SERVICE_UUID, TX_CHARACTERISTIC_UUID};
+use bindings::Command;
+use gatt::{
+    RX_CHARACTERISTIC_SIZE, RX_CHARACTERISTIC_UUID, SERVICE_UUID, TX_CHARACTERISTIC_SIZE,
+    TX_CHARACTERISTIC_UUID,
+};
 use types::{
     BluetoothError::*,
     Error::{self, *},
-    Request, POLL_DELAY,
+    Request, POLL_DELAY, SCAN_TIMEOUT,
 };
-
-use bindings::Command;
-
-use crate::gatt::TX_CHARACTERISTIC_SIZE;
 
 // Constants
 const BAUD_RATE: u32 = 115200;
@@ -95,6 +95,10 @@ async fn already_connected_find_serial_characteristics(
 async fn find_serial_characteristics(device: &Device) -> Result<SerialCharacteristics, Error> {
     // Get GAP information of the device
     let addr = device.address();
+
+    if addr != Address::from_str("00:60:37:E9:0B:6F").unwrap() {
+        Err(BluetoothError(MissingService))?;
+    }
 
     // Get GATT information of the device without connecting
     let uuids = device.uuids().await?.unwrap_or_default();
@@ -193,26 +197,33 @@ impl SerialBluetoothBridge {
     }
 
     /// Connect to the wireless UART device
-    pub async fn connect_to_device(adapter: &mut Adapter) -> Result<WirelessUartDevice, Error> {
+    pub async fn connect_to_device(
+        adapter: &mut Adapter,
+    ) -> Result<Option<WirelessUartDevice>, Error> {
         let discover = adapter.discover_devices().await?;
         pin_mut!(discover);
 
+        let start_time = Instant::now();
         let wireless_uart_device = loop {
             let adapter_event = discover
                 .next()
                 .await
                 .ok_or(BluetoothError(MissingAdapterEvent))?;
 
+            if start_time.elapsed().as_millis() > SCAN_TIMEOUT as u128 {
+                break None;
+            }
+
             match adapter_event {
                 AdapterEvent::DeviceAdded(address) => {
                     let device = adapter.device(address)?;
                     match find_serial_characteristics(&device).await {
                         Ok(serial_characteristics) => {
-                            break WirelessUartDevice {
+                            break Some(WirelessUartDevice {
                                 address,
                                 device,
                                 serial_characteristics,
-                            };
+                            });
                         }
                         Err(e) => {
                             error!("Failed to find the serial characteristics for {device:?}: {e}");
@@ -393,8 +404,8 @@ impl SerialBluetoothBridge {
                 Self::deinitialize_bluetooth_adapter().await?;
                 let mut adapter = Self::initialize_bluetooth_adapter().await?;
                 // Connect
-                self.wireless_uart_device = Some(Self::connect_to_device(&mut adapter).await?);
-                self.connected = true;
+                self.wireless_uart_device = Self::connect_to_device(&mut adapter).await?;
+                self.connected = self.wireless_uart_device.is_some();
             }
             Disconnect => {
                 println!("Disconnecting");
@@ -424,6 +435,34 @@ impl SerialBluetoothBridge {
     }
 }
 
+async fn loop_iteration(serial_bridge: &mut SerialBluetoothBridge) -> Result<(), Error> {
+    // Receive
+    if serial_bridge.connected {
+        let rx = serial_bridge.read_from_bluetooth_device().await?;
+        if let Some(rx) = rx {
+            serial_bridge.write_to_serial(rx)?;
+        }
+    }
+
+    // Transmit
+    let tx = serial_bridge.read_from_serial_port()?;
+    if let Some(tx) = tx {
+        // Handle a command meant for us
+        if tx.starts_with('^') {
+            if let Err(e) = serial_bridge.handle_command(&tx).await {
+                error!("Error handling command: {}", e);
+            };
+        } else if serial_bridge.connected {
+            serial_bridge.write_to_bluetooth_device(tx).await?;
+        }
+    }
+
+    // Delay
+    sleep(Duration::from_millis(POLL_DELAY)).await;
+
+    Ok(())
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Error> {
     env_logger::init();
@@ -441,28 +480,11 @@ async fn main() -> Result<(), Error> {
 
     // Serial handles
     loop {
-        // Receive
-        if serial_bridge.connected {
-            let rx = serial_bridge.read_from_bluetooth_device().await?;
-            if let Some(rx) = rx {
-                serial_bridge.write_to_serial(rx)?;
-            }
+        if let Err(e) = loop_iteration(&mut serial_bridge).await {
+            println!("Error: {e}");
+            let _ = SerialBluetoothBridge::deinitialize_bluetooth_adapter().await;
+            serial_bridge.wireless_uart_device = None;
+            serial_bridge.connected = false;
         }
-
-        // Transmit
-        let tx = serial_bridge.read_from_serial_port()?;
-        if let Some(tx) = tx {
-            // Handle a command meant for us
-            if tx.starts_with('^') {
-                if let Err(e) = serial_bridge.handle_command(&tx).await {
-                    error!("Error handling command: {:?}", e);
-                };
-            } else if serial_bridge.connected {
-                serial_bridge.write_to_bluetooth_device(tx).await?;
-            }
-        }
-
-        // Delay
-        sleep(Duration::from_millis(POLL_DELAY)).await;
     }
 }

@@ -12,6 +12,7 @@ use thiserror::Error as ThisError;
 
 // Constants
 pub const POLL_DELAY: u64 = 20; // Milliseconds
+pub const SCAN_TIMEOUT: u64 = 5000; // Milliseconds
 
 /***** Enums *****/
 
@@ -33,7 +34,7 @@ pub enum Error {
     RequestError(String),
 }
 
-/// A bluetooth error that has not been propogated through Bluer
+/// A bluetooth error that has not been propagated through Bluer
 #[derive(Debug, ThisError)]
 pub enum BluetoothError {
     #[error("The service needed could not be found")]
