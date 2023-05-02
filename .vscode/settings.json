@@ -3,6 +3,7 @@
         "bouncetime",
         "chrono",
         "consts",
+        "COOLDOWN",
         "eframe",
         "egui",
         "epaint",

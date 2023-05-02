@@ -37,6 +37,7 @@ from bindings import (
     unsigned_float,
 )
 from shared import (
+    BACKWARD_COOLDOWN_SECONDS,
     BACKWARD_LEEWAY_DISTANCE_CENTIMETERS,
     CAUTIOUS_REVERSE_STALL_FOR_SECONDS,
     FORWARD_LEEWAY_DISTANCE_CENTIMETERS,
@@ -241,6 +242,12 @@ def start_thread(arguments: StartArguments):
                 if direction == Direction.Backward:
                     # Exceeded magnet hits
                     if RunData.magnet_hits_cautiously_reversing >= 1:
+                        # Cooldown
+                        if (
+                            unix_epoch() - RunData.stop_cautious_reversing_time
+                            > BACKWARD_COOLDOWN_SECONDS
+                        ):
+                            continue
                         direction = Direction.Stopped
                         Motor.stop()
                         RunData.magnet_hits_cautiously_reversing = 0
@@ -321,12 +328,16 @@ SERIAL_CALLBACKS_LUT = {
     Command.StaticStatus: static_status,
 }
 SETUP_GPIO_CALLBACKS_LUT = {
-    GPIOPin.MagnetHallEffectSensor: lambda: GPIO.setup(
-        GPIOPin.MagnetHallEffectSensor, GPIO.IN, pull_up_down=GPIO.PUD_UP
-    )
+    GPIOPin.MagnetHallEffectSensor1: lambda: GPIO.setup(
+        GPIOPin.MagnetHallEffectSensor1, GPIO.IN, pull_up_down=GPIO.PUD_UP
+    ),
+    GPIOPin.MagnetHallEffectSensor2: lambda: GPIO.setup(
+        GPIOPin.MagnetHallEffectSensor2, GPIO.IN, pull_up_down=GPIO.PUD_UP
+    ),
 }
 GPIO_CALLBACKS_LUT = {
-    GPIOPin.MagnetHallEffectSensor: magnet_event,
+    GPIOPin.MagnetHallEffectSensor1: magnet_event,
+    GPIOPin.MagnetHallEffectSensor2: magnet_event,
 }
 
 

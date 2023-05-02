@@ -168,7 +168,8 @@ class GPIOPin(Enum):
     MotorControllerForwardNegative = 27  # GPIO_GEN2
     MotorControllerBackwardPositive = 23  # GPIO_GEN4
     MotorControllerBackwardNegative = 24  # GPIO_GEN5
-    MagnetHallEffectSensor = 25  # GPIO_GEN6
+    MagnetHallEffectSensor1 = 25  # GPIO_GEN6
+    MagnetHallEffectSensor2 = 7  # CE1
 
 
 class TransitMode(Enum):
