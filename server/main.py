@@ -82,6 +82,7 @@ class RunData:
 
     magnet_time = 0.0
     next_status_poll_time = 0.0
+    start_cautious_reversing_time = 0.0
     stop_cautious_reversing_time = 0.0
     magnet_hits_cautiously_reversing = 0
 
@@ -145,11 +146,10 @@ def start(event: SerialEvent) -> StartResponse:
 
 
 def start_thread(arguments: StartArguments):
-    should_reverse_brake = arguments.reverse_brake
+    should_reverse_brake = arguments.reverse_brake  # FIXME: Use this
 
     RunData.next_status_poll_time = unix_epoch() + STATUS_POLL_DURATION_SECONDS
     MutexStartData.magnet_hits = 0
-    last_magnet_hits = 0
 
     def send_status():
         current_time = unix_epoch()
@@ -242,10 +242,10 @@ def start_thread(arguments: StartArguments):
                 if direction == Direction.Backward:
                     # Exceeded magnet hits
                     if RunData.magnet_hits_cautiously_reversing >= 1:
-                        # Cooldown
+                        # Cooldown (as it may detect the magnet as it spins the tiniest amount)
                         if (
-                            unix_epoch() - RunData.stop_cautious_reversing_time
-                            > BACKWARD_COOLDOWN_SECONDS
+                            unix_epoch() - RunData.start_cautious_reversing_time
+                            <= BACKWARD_COOLDOWN_SECONDS
                         ):
                             continue
                         direction = Direction.Stopped
@@ -259,6 +259,7 @@ def start_thread(arguments: StartArguments):
                         >= RunData.stop_cautious_reversing_time
                         + CAUTIOUS_REVERSE_STALL_FOR_SECONDS
                     ):
+                        RunData.start_cautious_reversing_time = unix_epoch()
                         direction = Direction.Backward
                         Motor.backward()
 

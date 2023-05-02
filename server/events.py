@@ -470,14 +470,14 @@ class GPIOEventPropagator:
 
         # Encapsulate everything into a :class:`GPIOEvent`
         event = GPIOEvent(pin=pin, value=value, metadata=MetaData(unix_epoch()))
-        Logger.verbose(f'Callback for {pin}: {"HIGH" if value else "LOW"}')
+        Logger.verbose(f'Callback for GPIO pin {pin}: {"HIGH" if value else "LOW"}')
 
         # Call the callback
         try:
             self.callbacks_lut[pin](event)
         except Exception as e:
             Logger.fatal(
-                f'Failed to call callback for event on GPIO {pin}: {"HIGH" if value else "LOW"}'
+                f'Failed to call callback for event on GPIO pin {pin}: {"HIGH" if value else "LOW"}'
             )
             Logger.log_error(e)
             raise
